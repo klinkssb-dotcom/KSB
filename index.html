@@ -234,6 +234,7 @@
       <button data-target="recap">Weekly Recap</button>
       <button data-target="notifications">Notifications</button>
       <button data-target="rules">League Rules</button>
+      <button data-target="faq">FAQ / Help</button>
     </nav>
 
     <div class="userbox">
@@ -570,8 +571,8 @@
     <section id="rules" class="section rules">
       <div class="hero">
         <div class="eyebrow">Official Rules</div>
-        <h1>League Rules</h1>
-        <p>This page is intended to be the single source of truth for the league.</p>
+        <h1>KSB League Rules</h1>
+        <p>This is the single source of truth for bankrolls, wagers, power-ups, loans, interest, postseason limits, parlays, and settlement.</p>
       </div>
 
       <div class="card">
@@ -580,7 +581,7 @@
           <li>Every player starts with <strong>$2,000</strong> in fake money.</li>
           <li>The season runs through the <strong>Super Bowl</strong>.</li>
           <li>Final standings are based on <strong>Net Worth = Cash − Principal Owed − Interest Owed</strong>.</li>
-          <li>There are <strong>no tiebreakers</strong>. Equal net worth means a shared place/title.</li>
+          <li>There are <strong>no tiebreakers</strong>. Equal final net worth means a shared place/title.</li>
         </ul>
 
         <h3>2. Weekly Betting Limits</h3>
@@ -588,67 +589,195 @@
           <li>Maximum <strong>10 wagers per NFL week</strong>.</li>
           <li>Regular-season normal wagers: <strong>$10–$100</strong>.</li>
           <li>One weekly <strong>Big Bet</strong>: <strong>$101–$200</strong>.</li>
-          <li>Big Bet is <strong>tax-exempt</strong> and cannot use Small Boost or Big Boost.</li>
-          <li>During the NFL postseason, normal wager and Big Bet limits <strong>double</strong>.</li>
-          <li>Parlays are allowed with <strong>no additional leg limit</strong>.</li>
-          <li>Multiple wagers on the same game are allowed.</li>
+          <li>A parlay counts as <strong>one wager</strong> toward the weekly 10-bet limit.</li>
+          <li>Multiple wagers on the same NFL game are allowed.</li>
         </ul>
 
-        <h3>3. Weekly Power-Ups</h3>
+        <h3>3. Parlays</h3>
+        <ul>
+          <li>Parlays are allowed with <strong>no overall leg limit</strong>.</li>
+          <li>The site currently allows <strong>one leg per NFL game</strong>. Same-game parlays are not offered.</li>
+          <li>Parlay odds lock when the wager is submitted.</li>
+          <li>If any leg loses, the parlay loses.</li>
+          <li>If a leg pushes, that leg is removed and the remaining parlay odds are recalculated.</li>
+          <li>If every leg pushes, the stake is returned.</li>
+        </ul>
+
+        <h3>4. Weekly Power-Ups</h3>
         <ul>
           <li><strong>Small Boost:</strong> +50% to the profit of one eligible wager.</li>
           <li><strong>Big Boost:</strong> +100% to the profit of one eligible wager.</li>
           <li><strong>Tax Man:</strong> target another player's eligible open wager before kickoff. If it wins, collect 20% of that wager's profit.</li>
-          <li>Tax Man cannot target a Big Bet.</li>
-          <li>Power-ups reset each Tuesday morning.</li>
-          <li>Postseason power-up strength stays the same.</li>
-          <li>Voided/cancelled bets restore any attached boost.</li>
-        </ul>
-
-        <h3>4. Super Bowl</h3>
-        <ul>
-          <li>Super Bowl wagers have <strong>no wager amount limits</strong>.</li>
-          <li>No Small Boost, Big Boost, or Tax Man may be used on Super Bowl wagers.</li>
+          <li>Only one Tax Man may be attached to a wager.</li>
+          <li>Big Bets cannot use Small Boost or Big Boost and are Tax Man exempt.</li>
+          <li>Power-ups reset each Tuesday morning and unused power-ups expire.</li>
+          <li>Voided/cancelled wagers restore an attached boost when applicable.</li>
         </ul>
 
         <h3>5. Loans & Interest</h3>
         <ul>
           <li>Loans are fixed at <strong>$1,000</strong>.</li>
-          <li>Maximum <strong>one loan per NFL week</strong>.</li>
+          <li>Maximum <strong>one new loan per NFL week</strong>.</li>
           <li>There is <strong>no overall debt cap</strong>.</li>
           <li>Interest is <strong>10% per NFL week</strong> and is assessed Tuesday morning.</li>
-          <li>A newly taken loan does not get charged interest until the following Tuesday rollover.</li>
-          <li>Available cash automatically pays weekly interest first.</li>
-          <li>Any unpaid interest becomes <strong>Interest Owed</strong>.</li>
-          <li>Players may repay debt at any time. Repayments hit Interest Owed first, then principal.</li>
+          <li>Newly borrowed principal gets one rollover of grace before becoming interest-bearing.</li>
+          <li>Available cash automatically pays Interest Owed first on Tuesday.</li>
+          <li>Any unpaid interest remains as <strong>Interest Owed</strong>.</li>
+          <li>Players may repay debt at any time. Repayments hit Interest Owed first, then Principal Owed.</li>
         </ul>
 
         <h3>6. Bet Locking & Settlement</h3>
         <ul>
           <li>No wager may be placed after kickoff.</li>
           <li>Odds and lines lock when the wager is submitted.</li>
+          <li>There are no cash-outs or edits after submission.</li>
           <li>Pushes return the original stake.</li>
-          <li>Voided/cancelled bets return the stake.</li>
+          <li>Voided/cancelled wagers return the stake.</li>
           <li>Bad or missing lines are disabled rather than guessed.</li>
+          <li>Completed moneyline, spread, total, and parlay wagers are settled automatically from NFL score data.</li>
         </ul>
 
-        <h3>7. Public Records</h3>
+        <h3>7. Postseason & Super Bowl</h3>
+        <ul>
+          <li>During the NFL postseason before the Super Bowl, normal wager limits double to <strong>$20–$200</strong>.</li>
+          <li>Big Bet guardrails also double, up to <strong>$400</strong>.</li>
+          <li>Power-up strength stays the same during the postseason.</li>
+          <li>Super Bowl wagers have <strong>no wager amount limits</strong>.</li>
+          <li>No Small Boost, Big Boost, or Tax Man may be used on Super Bowl wagers.</li>
+        </ul>
+
+        <h3>8. Public Records & Standings</h3>
         <ul>
           <li>All wagers and transactions are visible league-wide.</li>
-          <li>Each player has a personal transaction history.</li>
-          <li>The League Ledger is append-only.</li>
-          <li>Commissioner corrections appear as public adjustment transactions rather than silently editing history.</li>
-          <li>Peak net worth and lowest net worth are tracked for every player.</li>
+          <li>The League Ledger records bets, settlements, loans, repayments, interest, Tax Man transfers, and commissioner actions.</li>
+          <li>The ledger is intended to be append-only. Corrections should be transparent rather than silently changing history.</li>
+          <li>Peak Net Worth and Lowest Net Worth are tracked for every player.</li>
         </ul>
 
-        <h3>8. Tuesday Rollover</h3>
+        <h3>9. Tuesday Rollover</h3>
         <ul>
-          <li>Settle the previous week's activity.</li>
           <li>Charge weekly interest and auto-pay from available cash.</li>
           <li>Save standings snapshots and update peak/low net worth.</li>
           <li>Generate the weekly recap.</li>
-          <li>Reset 10-bet limit, Big Bet availability, weekly loan availability, and weekly power-ups.</li>
+          <li>Reset the 10-bet counter, Big Bet availability, weekly loan slot, Small Boost, Big Boost, and Tax Man.</li>
         </ul>
+
+        <h3>10. Commissioner Reset</h3>
+        <ul>
+          <li>The commissioner may reset the entire season from the Commissioner Controls panel.</li>
+          <li>A reset returns every player to <strong>$2,000</strong>, clears debt and records, and removes season wagers, ledger history, recaps, snapshots, and notifications.</li>
+          <li>The reset requires multiple confirmations because it cannot be undone.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="faq" class="section">
+      <div class="hero">
+        <div class="eyebrow">Help Center</div>
+        <h1>KSB FAQ</h1>
+        <p>Basic help for placing bets, building parlays, using power-ups, understanding debt, and reading the standings.</p>
+      </div>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>How do I place a normal bet?</h3>
+          <p>Open Sportsbook, click the line you want, enter your stake, choose Normal Bet, optionally select a power-up, then click <strong>Place Wager</strong>. A confirmation pop-up shows the stake and odds before submission.</p>
+        </div>
+
+        <div class="card">
+          <h3>How do I build a parlay?</h3>
+          <p>Set <strong>Bet Format</strong> to Parlay, then click one selection from each NFL game you want to include. Add at least two legs, choose your stake, and submit the wager.</p>
+        </div>
+
+        <div class="card">
+          <h3>Why can't I add two picks from the same game?</h3>
+          <p>KSB does not currently offer same-game parlays because correlated selections require special pricing. Regular parlays can use one leg from each game.</p>
+        </div>
+
+        <div class="card">
+          <h3>Does a parlay count as multiple weekly bets?</h3>
+          <p>No. The entire parlay counts as <strong>one wager</strong> toward your 10-wager weekly limit.</p>
+        </div>
+
+        <div class="card">
+          <h3>When do odds update?</h3>
+          <p>Odds refresh automatically around <strong>12 PM and 8 PM Eastern</strong>. Everyone sees the same cached lines between refreshes.</p>
+        </div>
+
+        <div class="card">
+          <h3>When are bets settled?</h3>
+          <p>The backend checks open wagers every hour. Once the score source reports a game final, eligible wagers are settled automatically.</p>
+        </div>
+
+        <div class="card">
+          <h3>What happens on a push?</h3>
+          <p>A single-bet push returns the stake. On a parlay, the pushed leg is removed and the remaining parlay odds are recalculated. If every leg pushes, the full stake is returned.</p>
+        </div>
+
+        <div class="card">
+          <h3>What is the Big Bet?</h3>
+          <p>Your Big Bet is the one weekly wager allowed above the normal regular-season maximum. It is $101–$200 during the regular season, cannot be boosted, and cannot be targeted by Tax Man.</p>
+        </div>
+
+        <div class="card">
+          <h3>How do Small Boost and Big Boost work?</h3>
+          <p>Small Boost adds 50% to winning profit. Big Boost adds 100% to winning profit. Each is available once per NFL week on an eligible wager.</p>
+        </div>
+
+        <div class="card">
+          <h3>How does Tax Man work?</h3>
+          <p>Use Tax Man on another player's eligible open wager before kickoff. If that wager wins, you receive 20% of its profit. If it loses or pushes, you receive nothing.</p>
+        </div>
+
+        <div class="card">
+          <h3>How do loans work?</h3>
+          <p>You can borrow exactly <strong>$1,000</strong> once per NFL week. The cash is added immediately and the same amount is added to Principal Owed.</p>
+        </div>
+
+        <div class="card">
+          <h3>When is interest charged?</h3>
+          <p>Interest is charged Tuesday morning at 10% of interest-bearing principal. Newly borrowed principal gets one rollover of grace before it begins accruing interest.</p>
+        </div>
+
+        <div class="card">
+          <h3>How do debt repayments work?</h3>
+          <p>You may repay at any time. Repayments apply to Interest Owed first and then Principal Owed. The site asks for confirmation before submitting a repayment.</p>
+        </div>
+
+        <div class="card">
+          <h3>What is Net Worth?</h3>
+          <p><strong>Net Worth = Cash − Principal Owed − Interest Owed.</strong> The standings are ranked by Net Worth, not simply by how much cash a player has.</p>
+        </div>
+
+        <div class="card">
+          <h3>What resets every Tuesday?</h3>
+          <p>Your wager count, Big Bet, weekly loan slot, Small Boost, Big Boost, and Tax Man reset. Interest is processed and the weekly recap is generated at the same rollover.</p>
+        </div>
+
+        <div class="card">
+          <h3>Why did my wager leave Open Bets?</h3>
+          <p>Once a wager settles, it is no longer considered open. The result and money movement remain in the League Ledger and feed into the weekly recap.</p>
+        </div>
+
+        <div class="card">
+          <h3>Can I edit or cancel a wager after placing it?</h3>
+          <p>No. Submitted wagers cannot be edited or cashed out. Review the confirmation pop-up before committing the wager.</p>
+        </div>
+
+        <div class="card">
+          <h3>What if a bet settles incorrectly?</h3>
+          <p>Contact the commissioner. The goal is to correct issues transparently rather than silently modifying league history.</p>
+        </div>
+
+        <div class="card">
+          <h3>What does Reset Entire Season do?</h3>
+          <p>This commissioner-only action returns all players to $2,000 and clears season wagers, transaction history, recaps, snapshots, notifications, debt, and records. It requires multiple confirmations.</p>
+        </div>
+
+        <div class="card">
+          <h3>Where can I see everyone's activity?</h3>
+          <p>Use <strong>League Ledger</strong> for league-wide money movements and <strong>Standings</strong> for bankroll, debt, records, ROI, peak/low net worth, Big Bet record, and Tax Man earnings.</p>
+        </div>
       </div>
     </section>
   </main>
