@@ -513,16 +513,13 @@
 
     <section id="recap" class="section">
       <div class="hero">
-        <div class="eyebrow">Week 1 Recap</div>
+        <div class="eyebrow" id="recapWeekLabel">Weekly Recap</div>
         <h1>Weekly Recap</h1>
-        <p>Generated automatically at the Tuesday morning rollover.</p>
+        <p id="recapPeriodText">Generated automatically at the Tuesday morning rollover.</p>
       </div>
 
-      <div class="grid cols-4">
-        <div class="card"><div class="eyebrow">Bettor of the Week</div><div class="metric small gold">Jared</div><div class="muted">+$310 weekly P/L</div></div>
-        <div class="card"><div class="eyebrow">Biggest Hit</div><div class="metric small green">+$260</div><div class="muted">Bills +130, Big Boost</div></div>
-        <div class="card"><div class="eyebrow">Tax Collector</div><div class="metric small blue">Sara</div><div class="muted">$52 collected</div></div>
-        <div class="card"><div class="eyebrow">Most Interest Paid</div><div class="metric small red">$100</div><div class="muted">Mike</div></div>
+      <div class="grid cols-4" id="recapTopCards">
+        <div class="card"><div class="muted">No weekly recap has been generated yet.</div></div>
       </div>
 
       <div class="grid cols-2" style="margin-top:16px">
@@ -530,12 +527,9 @@
           <h2>Weekly P/L</h2>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Player</th><th>P/L</th><th>Rank Change</th><th>Bets</th><th>Record</th></tr></thead>
-              <tbody>
-                <tr><td>Jared</td><td class="green">+$310</td><td class="green">▲ 2</td><td>8</td><td>5-3</td></tr>
-                <tr><td>Sara</td><td class="green">+$155</td><td class="green">▲ 1</td><td>9</td><td>6-3</td></tr>
-                <tr><td>Chris</td><td class="green">+$82</td><td>—</td><td>7</td><td>4-3</td></tr>
-                <tr><td>Mike</td><td class="red">-$240</td><td class="red">▼ 3</td><td>10</td><td>3-7</td></tr>
+              <thead><tr><th>Player</th><th>P/L</th><th>Bets</th><th>Record</th><th>Tax</th><th>Interest</th></tr></thead>
+              <tbody id="recapPLBody">
+                <tr><td colspan="6"><div class="empty">No recap data yet.</div></td></tr>
               </tbody>
             </table>
           </div>
@@ -543,11 +537,8 @@
 
         <div class="card">
           <h2>Awards</h2>
-          <div class="feed">
-            <div class="notification"><strong>🔥 Biggest Big Bet Hit</strong><div class="muted">Chris — $200 at +145</div></div>
-            <div class="notification"><strong>💸 Tax Man of the Week</strong><div class="muted">Sara collected $52</div></div>
-            <div class="notification"><strong>📉 Coldest Bettor</strong><div class="muted">Mike finished 3-7</div></div>
-            <div class="notification"><strong>🎲 Degenerate of the Week</strong><div class="muted">Mike used all 10 bets and borrowed $1,000</div></div>
+          <div class="feed" id="recapAwards">
+            <div class="notification"><div class="muted">Awards will appear after the Tuesday rollover.</div></div>
           </div>
         </div>
       </div>
@@ -964,6 +955,8 @@ let ledger = [];
 let stopBetsListener = null;
 let stopLedgerListener = null;
 let stopUsersListener = null;
+let stopRecapListener = null;
+let latestRecap = null;
 
 const notifications = [
   {unread:true,title:"Tax Man attached",body:"Sara used Tax Man on Jared's Bills ML wager."},
@@ -1737,6 +1730,7 @@ function stopLeagueListeners(){
   if(stopBetsListener){stopBetsListener();stopBetsListener=null;}
   if(stopLedgerListener){stopLedgerListener();stopLedgerListener=null;}
   if(stopUsersListener){stopUsersListener();stopUsersListener=null;}
+  if(stopRecapListener){stopRecapListener();stopRecapListener=null;}
 }
 
 function startLeagueListeners(){
@@ -1786,6 +1780,13 @@ function startLeagueListeners(){
   },err=>{
     console.error("Users listener failed",err);
   });
+
+  stopRecapListener=onSnapshot(doc(db,"league","latestRecap"),snap=>{
+    latestRecap=snap.exists() ? snap.data() : null;
+    renderWeeklyRecap();
+  },err=>{
+    console.error("Weekly recap listener failed",err);
+  });
 }
 
 onAuthStateChanged(auth, async (user)=>{
@@ -1834,12 +1835,108 @@ onAuthStateChanged(auth, async (user)=>{
   }
 });
 
+function renderWeeklyRecap(){
+  const label=document.getElementById("recapWeekLabel");
+  const period=document.getElementById("recapPeriodText");
+  const top=document.getElementById("recapTopCards");
+  const body=document.getElementById("recapPLBody");
+  const awards=document.getElementById("recapAwards");
+
+  if(!label || !period || !top || !body || !awards) return;
+
+  if(!latestRecap){
+    label.textContent="Weekly Recap";
+    period.textContent="Generated automatically at the Tuesday morning rollover.";
+    top.innerHTML=`<div class="card"><div class="muted">No weekly recap has been generated yet.</div></div>`;
+    body.innerHTML=`<tr><td colspan="6"><div class="empty">No recap data yet.</div></td></tr>`;
+    awards.innerHTML=`<div class="notification"><div class="muted">Awards will appear after the Tuesday rollover.</div></div>`;
+    return;
+  }
+
+  label.textContent=latestRecap.weekKey ? `Rollover ${latestRecap.weekKey}` : "Weekly Recap";
+
+  const start=Number(latestRecap.periodStartMs||0);
+  const end=Number(latestRecap.periodEndMs||0);
+  period.textContent=(start&&end)
+    ? `${new Date(start).toLocaleString()} through ${new Date(end).toLocaleString()}`
+    : "Generated automatically at the Tuesday morning rollover.";
+
+  const bettor=latestRecap.bettorOfWeek;
+  const hit=latestRecap.biggestHit;
+  const tax=latestRecap.taxCollector;
+  const interest=latestRecap.mostInterestPaid;
+
+  top.innerHTML=`
+    <div class="card">
+      <div class="eyebrow">Bettor of the Week</div>
+      <div class="metric small gold">${bettor?.player||"—"}</div>
+      <div class="muted">${bettor ? signedMoney(Number(bettor.weeklyPL||0))+" weekly P/L" : "No settled wagers"}</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Biggest Hit</div>
+      <div class="metric small green">${hit ? signedMoney(Number(hit.amount||0)) : "—"}</div>
+      <div class="muted">${hit ? `${hit.player} — ${hit.selection||"winning wager"}` : "No winning wager"}</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Tax Collector</div>
+      <div class="metric small blue">${tax?.player||"—"}</div>
+      <div class="muted">${tax ? money(Number(tax.amount||0))+" collected" : "No Tax Man payout"}</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Most Interest Paid</div>
+      <div class="metric small red">${interest ? money(Number(interest.amount||0)) : "—"}</div>
+      <div class="muted">${interest?.player||"No interest paid"}</div>
+    </div>
+  `;
+
+  const rows=Array.isArray(latestRecap.playerRows) ? latestRecap.playerRows : [];
+
+  body.innerHTML=rows.length ? rows.map(p=>`
+    <tr>
+      <td><strong>${p.player||"Player"}</strong></td>
+      <td class="${Number(p.weeklyPL||0)>=0?"green":"red"}">${signedMoney(Number(p.weeklyPL||0))}</td>
+      <td>${Number(p.bets||0)}</td>
+      <td>${Number(p.wins||0)}-${Number(p.losses||0)}${Number(p.pushes||0)?`-${Number(p.pushes||0)}P`:""}</td>
+      <td>${money(Number(p.taxCollected||0))}</td>
+      <td>${money(Number(p.interestPaid||0))}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="6"><div class="empty">No player activity for this recap.</div></td></tr>`;
+
+  const cold=latestRecap.coldestBettor;
+  const degen=latestRecap.degenerate;
+  const big=latestRecap.bestBigBet;
+
+  awards.innerHTML=`
+    <div class="notification">
+      <strong>🔥 Biggest Hit</strong>
+      <div class="muted">${hit ? `${hit.player} — ${signedMoney(Number(hit.amount||0))} on ${hit.selection||"a winning wager"}` : "No winner this week"}</div>
+    </div>
+    <div class="notification">
+      <strong>💸 Tax Man of the Week</strong>
+      <div class="muted">${tax ? `${tax.player} collected ${money(Number(tax.amount||0))}` : "Nobody collected Tax Man money"}</div>
+    </div>
+    <div class="notification">
+      <strong>📉 Coldest Bettor</strong>
+      <div class="muted">${cold ? `${cold.player} finished ${cold.wins||0}-${cold.losses||0}${cold.pushes?`-${cold.pushes}P`:""} (${signedMoney(Number(cold.weeklyPL||0))})` : "No settled wagers"}</div>
+    </div>
+    <div class="notification">
+      <strong>🎲 Degenerate of the Week</strong>
+      <div class="muted">${degen ? `${degen.player} made ${degen.bets||0} bets${Number(degen.borrowed||0)>0?` and borrowed ${money(Number(degen.borrowed||0))}`:""}` : "No qualifying activity"}</div>
+    </div>
+    <div class="notification">
+      <strong>💰 Big Bet Spotlight</strong>
+      <div class="muted">${big ? `${big.player}: ${big.wins||0}-${big.losses||0}${big.pushes?`-${big.pushes}P`:""}` : "No Big Bet settled"}</div>
+    </div>
+  `;
+}
+
 function renderAll(){
   renderAccountMetrics();
   renderOpenBets();
   renderStandings();
   renderLedger();
   renderDashboardFeed();
+  renderWeeklyRecap();
 }
 
 loadLiveOdds();
