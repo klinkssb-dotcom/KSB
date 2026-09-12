@@ -1189,9 +1189,18 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
       if(power==="small" && Boolean(u.smallBoostUsed)) throw new Error("You already used your Small Boost this week.");
       if(power==="big" && Boolean(u.bigBoostUsed)) throw new Error("You already used your Big Boost this week.");
 
+      const principal=Number(u.principalOwed||0);
+      const interest=Number(u.interestOwed||0);
+      const cashAfter=cash-stake;
+      const netWorthAfter=cashAfter-principal-interest;
+      const oldPeak=Number(u.peakNetWorth ?? netWorthAfter);
+      const oldLow=Number(u.lowNetWorth ?? netWorthAfter);
+
       const updates={
-        cash: cash-stake,
-        betsThisWeek: betsThisWeek+1
+        cash: cashAfter,
+        betsThisWeek: betsThisWeek+1,
+        peakNetWorth: Math.max(oldPeak,netWorthAfter),
+        lowNetWorth: Math.min(oldLow,netWorthAfter)
       };
       if(betType==="big") updates.bigBetUsed=true;
       if(power==="small") updates.smallBoostUsed=true;
@@ -1224,10 +1233,6 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
         taxRate:0,
         createdAtMs:now
       });
-
-      const principal=Number(u.principalOwed||0);
-      const interest=Number(u.interestOwed||0);
-      const cashAfter=cash-stake;
 
       tx.set(txRef,{
         userId:auth.currentUser.uid,
@@ -1459,12 +1464,17 @@ document.getElementById("borrowBtn").addEventListener("click",async ()=>{
       const principal=Number(u.principalOwed||0)+RULES.LOAN_AMOUNT;
       const interest=Number(u.interestOwed||0);
       const gracePrincipal=Number(u.gracePrincipal||0)+RULES.LOAN_AMOUNT;
+      const netWorthAfter=cash-principal-interest;
+      const oldPeak=Number(u.peakNetWorth ?? netWorthAfter);
+      const oldLow=Number(u.lowNetWorth ?? netWorthAfter);
 
       tx.update(userRef,{
         cash,
         principalOwed:principal,
         gracePrincipal,
-        loanUsed:true
+        loanUsed:true,
+        peakNetWorth:Math.max(oldPeak,netWorthAfter),
+        lowNetWorth:Math.min(oldLow,netWorthAfter)
       });
 
       tx.set(txRef,{
@@ -1531,12 +1541,18 @@ document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
       const cashAfter=cash-amount;
       const interestPaid=Number(u.interestPaid||0)+paidInterest;
 
+      const netWorthAfter=cashAfter-principal-interest;
+      const oldPeak=Number(u.peakNetWorth ?? netWorthAfter);
+      const oldLow=Number(u.lowNetWorth ?? netWorthAfter);
+
       tx.update(userRef,{
         cash:cashAfter,
         principalOwed:principal,
         gracePrincipal,
         interestOwed:interest,
-        interestPaid
+        interestPaid,
+        peakNetWorth:Math.max(oldPeak,netWorthAfter),
+        lowNetWorth:Math.min(oldLow,netWorthAfter)
       });
 
       tx.set(txRef,{
@@ -1644,6 +1660,7 @@ function defaultUserProfile(user){
     email: user.email || "",
     cash: RULES.STARTING_BANKROLL,
     principalOwed: 0,
+    gracePrincipal: 0,
     interestOwed: 0,
     interestPaid: 0,
     betsThisWeek: 0,
@@ -1666,6 +1683,7 @@ function applyProfileToCurrentUser(uid, data){
     role: data.role || "member",
     cash: Number(data.cash ?? 0),
     principal: Number(data.principalOwed ?? 0),
+    gracePrincipal: Number(data.gracePrincipal ?? 0),
     interestOwed: Number(data.interestOwed ?? 0),
     interestPaid: Number(data.interestPaid ?? 0),
     betsThisWeek: Number(data.betsThisWeek ?? 0),
@@ -1798,6 +1816,7 @@ onAuthStateChanged(auth, async (user)=>{
       role:"member",
       cash:0,
       principal:0,
+      gracePrincipal:0,
       interestOwed:0,
       interestPaid:0,
       betsThisWeek:0,
