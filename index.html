@@ -787,6 +787,24 @@
   </div>
 </div>
 
+<div class="modal" id="resetSeasonModal">
+  <div class="modal-card">
+    <button class="modal-close" id="closeResetSeasonModal" type="button">×</button>
+    <div class="eyebrow">Commissioner Only</div>
+    <h2>Reset Entire Season?</h2>
+    <p class="muted">
+      This will reset every player to $2,000 and permanently clear wagers,
+      transaction history, weekly recaps, snapshots, notifications, debt, and records.
+    </p>
+    <p><strong>This cannot be undone.</strong></p>
+    <label for="resetSeasonConfirmText">Type RESET to continue</label>
+    <input id="resetSeasonConfirmText" type="text" autocomplete="off" placeholder="RESET">
+    <button class="btn danger" id="confirmResetSeasonBtn" type="button" style="margin-top:12px;width:100%">
+      Reset Entire Season
+    </button>
+  </div>
+</div>
+
 <div class="modal" id="loginModal">
   <div class="modal-panel">
     <h2>League Account</h2>
@@ -2154,6 +2172,10 @@ onAuthStateChanged(auth, async (user)=>{
 });
 
 
+function confirmAction_(message){
+  return window.confirm(message);
+}
+
 const resetSeasonModal=document.getElementById("resetSeasonModal");
 const resetSeasonBtn=document.getElementById("resetSeasonBtn");
 const closeResetSeasonModal=document.getElementById("closeResetSeasonModal");
@@ -2165,7 +2187,7 @@ resetSeasonBtn?.addEventListener("click",()=>{
     return;
   }
 
-  if(!confirmAction_("Are you sure you want to begin a full season reset?\n\nYou will still have to type RESET and confirm one final time before anything is deleted.")){
+  if(!window.confirm("Are you sure you want to begin a full season reset?\n\nYou will still have to type RESET and confirm one final time before anything is deleted.")){
     return;
   }
 
@@ -2190,7 +2212,7 @@ confirmResetSeasonBtn?.addEventListener("click",async ()=>{
     return;
   }
 
-  if(!confirmAction_("ARE YOU SURE?\n\nThis will permanently reset the ENTIRE KSB season for every player.\n\nAll wagers, ledger history, recaps, snapshots, notifications, debt, records, and bankroll changes will be cleared.\n\nClick OK only if you are certain.")){
+  if(!window.confirm("ARE YOU SURE?\n\nThis will permanently reset the ENTIRE KSB season for every player.\n\nAll wagers, ledger history, recaps, snapshots, notifications, debt, records, and bankroll changes will be cleared.\n\nClick OK only if you are certain.")){
     return;
   }
 
