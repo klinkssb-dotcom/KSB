@@ -73,6 +73,7 @@
       color:white;border-color:#3e638e;
     }
     .userbox{display:flex;align-items:center;gap:10px}
+    #userPill{cursor:pointer}
     .pill{
       padding:8px 12px;border-radius:999px;
       background:#0b1728;border:1px solid var(--line);
@@ -263,6 +264,7 @@
 
     <div class="userbox">
       <div class="pill" id="userPill"><span class="status-dot"></span>Guest Mode</div>
+      <button class="btn secondary" id="profileBtn" style="display:none">Profile</button>
       <button class="btn" id="loginBtn">Log In</button>
     </div>
   </header>
@@ -839,6 +841,36 @@
       <button class="btn secondary" id="ksbDialogCancelBtn" type="button">Cancel</button>
       <button class="btn" id="ksbDialogConfirmBtn" type="button">Confirm</button>
     </div>
+  </div>
+</div>
+
+
+<div class="modal" id="profileModal">
+  <div class="modal-panel">
+    <div class="eyebrow">League Profile</div>
+    <h2>Change Display Name</h2>
+    <p class="muted">
+      This is the name other players will see in standings, open wagers, and league activity.
+    </p>
+
+    <div style="margin-top:12px">
+      <label for="displayNameInput">Display Name</label>
+      <input
+        id="displayNameInput"
+        type="text"
+        maxlength="24"
+        autocomplete="nickname"
+        placeholder="Your league name"
+      />
+      <div class="muted" style="margin-top:6px">2–24 characters. Display names must be unique.</div>
+    </div>
+
+    <button class="btn" id="saveDisplayNameBtn" style="width:100%;margin-top:14px">
+      Save Display Name
+    </button>
+    <button class="btn secondary" id="closeProfileBtn" style="width:100%;margin-top:8px">
+      Cancel
+    </button>
   </div>
 </div>
 
@@ -1761,7 +1793,7 @@ function renderOpenBets(){
 
   body.innerHTML=rows.length ? rows.map((b,i)=>`
     <tr>
-      <td>${b.player||"Player"}</td>
+      <td>${displayNameForUid_(b.userId,b.player||"Player")}</td>
       <td>${b.betKind==="parlay"
           ? `<strong>${b.selection||"Parlay"}</strong><div class="muted">${(b.legs||[]).map(x=>x.selection).join(" + ")}</div>`
           : (b.selection||b.bet||"Wager")}</td>
@@ -1786,7 +1818,7 @@ function renderOpenBets(){
       if(!b) return;
       {
         const confirmed=await ksbConfirm_(
-          `Use Tax Man on ${b.player}'s ${b.selection}?\n\nThis uses your Tax Man for the week and locks to this wager immediately.`,
+          `Use Tax Man on ${displayNameForUid_(b.userId,b.player||"Player")}'s ${b.selection}?\n\nThis uses your Tax Man for the week and locks to this wager immediately.`,
           {title:"Use Tax Man?",confirmLabel:"Use Tax Man",danger:true}
         );
         if(!confirmed) return;
@@ -1836,7 +1868,7 @@ function renderOpenBets(){
             principalOwed:principal,
             interestOwed:interest,
             netWorth:cash-principal-interest,
-            note:`Tax Man attached to ${liveBet.player}'s ${liveBet.selection}`,
+            note:`Tax Man attached to ${displayNameForUid_(liveBet.userId,liveBet.player||"Player")}'s ${liveBet.selection}`,
             relatedBetId:b.id,
             createdAtMs:now
           });
@@ -1850,6 +1882,12 @@ function renderOpenBets(){
       }
     });
   });
+}
+
+function displayNameForUid_(uid,fallback="Player"){
+  if(!uid) return fallback || "Player";
+  const player=players.find(p=>p.id===uid);
+  return player?.name || fallback || "Player";
 }
 
 function tiedPlayerLabel_(matchingPlayers,zeroLabel){
@@ -1937,20 +1975,20 @@ function renderStandings(){
 
   const filter=document.getElementById("ledgerPlayerFilter");
   const selected=filter.value;
-  filter.innerHTML=`<option value="">All Players</option>` + players.map(p=>`<option value="${p.name}">${p.name}</option>`).join("");
+  filter.innerHTML=`<option value="">All Players</option>` + players.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");
   if([...filter.options].some(o=>o.value===selected)) filter.value=selected;
 }
 
 function renderLedger(){
   const playerFilter=document.getElementById("ledgerPlayerFilter").value;
   const typeFilter=document.getElementById("ledgerTypeFilter").value;
-  const rows=ledger.filter(x=>(!playerFilter||x.player===playerFilter)&&(!typeFilter||x.type===typeFilter));
+  const rows=ledger.filter(x=>(!playerFilter||x.userId===playerFilter)&&(!typeFilter||x.type===typeFilter));
   const body=document.getElementById("ledgerBody");
 
   body.innerHTML=rows.length?rows.map(x=>`
     <tr>
       <td>${x.timeLabel||new Date(Number(x.createdAtMs||0)).toLocaleString()}</td>
-      <td>${x.player||"Player"}</td>
+      <td>${displayNameForUid_(x.userId,x.player||"Player")}</td>
       <td><span class="chip">${x.type||"TRANSACTION"}</span></td>
       <td class="${Number(x.amount)>0?"green":Number(x.amount)<0?"red":""}">${signedMoney(Number(x.amount||0))}</td>
       <td>${money(x.cashAfter)}</td>
@@ -1984,8 +2022,8 @@ function renderDashboardFeed(){
   const latest=ledger.slice(0,4);
   document.getElementById("dashboardFeed").innerHTML=latest.length ? latest.map(x=>`
     <div class="feed-item">
-      <div class="avatar">${String(x.player||"?").charAt(0).toUpperCase()}</div>
-      <div><strong>${x.player||"Player"}</strong><div>${x.note||x.type||"League activity"}</div></div>
+      <div class="avatar">${String(displayNameForUid_(x.userId,x.player||"?")).charAt(0).toUpperCase()}</div>
+      <div><strong>${displayNameForUid_(x.userId,x.player||"Player")}</strong><div>${x.note||x.type||"League activity"}</div></div>
       <div class="feed-time">${new Date(Number(x.createdAtMs||Date.now())).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div>
     </div>
   `).join("") : `<div class="empty">No league activity yet.</div>`;
@@ -2164,10 +2202,23 @@ document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
 const loginModal=document.getElementById("loginModal");
 const loginBtn=document.getElementById("loginBtn");
 const userPill=document.getElementById("userPill");
+const profileBtn=document.getElementById("profileBtn");
+const profileModal=document.getElementById("profileModal");
+const displayNameInput=document.getElementById("displayNameInput");
+const saveDisplayNameBtn=document.getElementById("saveDisplayNameBtn");
+const closeProfileBtn=document.getElementById("closeProfileBtn");
 
 loginBtn.addEventListener("click", async ()=>{
   if(auth.currentUser){
-    if(confirm(`Log out ${auth.currentUser.email || auth.currentUser.displayName || "this account"}?`)){
+    const confirmed=await ksbConfirm_(
+      `Log out ${currentUser.name || auth.currentUser.email || "this account"}?`,
+      {
+        title:"Log Out?",
+        confirmLabel:"Log Out"
+      }
+    );
+
+    if(confirmed){
       try{
         await signOut(auth);
       }catch(err){
@@ -2181,6 +2232,89 @@ loginBtn.addEventListener("click", async ()=>{
 });
 
 document.getElementById("closeLoginBtn").addEventListener("click",()=>loginModal.classList.remove("open"));
+
+profileBtn?.addEventListener("click",()=>{
+  if(!auth.currentUser){
+    ksbAlert_("Log in before editing your profile.");
+    return;
+  }
+
+  displayNameInput.value=currentUser.name||"";
+  profileModal.classList.add("open");
+  setTimeout(()=>displayNameInput.focus(),0);
+});
+
+userPill?.addEventListener("click",()=>{
+  if(auth.currentUser) profileBtn?.click();
+});
+
+closeProfileBtn?.addEventListener("click",()=>{
+  profileModal.classList.remove("open");
+});
+
+saveDisplayNameBtn?.addEventListener("click",async ()=>{
+  if(!auth.currentUser){
+    ksbAlert_("Log in before editing your profile.");
+    return;
+  }
+
+  const newName=displayNameInput.value.replace(/\s+/g," ").trim();
+
+  if(newName.length<2 || newName.length>24){
+    await ksbNotice_("Display names must be between 2 and 24 characters.",{
+      title:"Invalid Display Name"
+    });
+    return;
+  }
+
+  if(!/^[A-Za-z0-9 ._'\-]+$/.test(newName)){
+    await ksbNotice_("Use letters, numbers, spaces, periods, apostrophes, underscores, or hyphens only.",{
+      title:"Invalid Display Name"
+    });
+    return;
+  }
+
+  saveDisplayNameBtn.disabled=true;
+  saveDisplayNameBtn.textContent="Saving…";
+
+  try{
+    const usersSnap=await getDocs(collection(db,"users"));
+    const duplicate=usersSnap.docs.some(d=>
+      d.id!==auth.currentUser.uid &&
+      String(d.data().displayName||"").trim().toLowerCase()===newName.toLowerCase()
+    );
+
+    if(duplicate){
+      throw new Error("That display name is already being used by another league member.");
+    }
+
+    await setDoc(
+      doc(db,"users",auth.currentUser.uid),
+      {displayName:newName},
+      {merge:true}
+    );
+
+    profileModal.classList.remove("open");
+
+    await ksbNotice_(
+      `Your display name is now "${newName}".`,
+      {
+        title:"Display Name Updated",
+        eyebrow:"Profile Saved"
+      }
+    );
+
+  }catch(err){
+    console.error("Display name update failed:",err);
+    await ksbNotice_(err?.message||"Could not update your display name.",{
+      title:"Update Failed",
+      eyebrow:"Error"
+    });
+  }finally{
+    saveDisplayNameBtn.disabled=false;
+    saveDisplayNameBtn.textContent="Save Display Name";
+  }
+});
 
 function friendlyAuthError(err){
   const code=String(err?.code||"");
@@ -2297,7 +2431,8 @@ async function ensureAndWatchUserProfile(user){
     const existing = snap.data();
     const identityPatch = {};
     if((user.email || "") !== (existing.email || "")) identityPatch.email = user.email || "";
-    if(user.displayName && user.displayName !== existing.displayName) identityPatch.displayName = user.displayName;
+    // displayName is intentionally league-controlled and may differ from
+    // the Google/Firebase Auth profile name.
     if(Object.keys(identityPatch).length){
       await setDoc(ref, identityPatch, {merge:true});
     }
@@ -2383,6 +2518,7 @@ function startLeagueListeners(){
 onAuthStateChanged(auth, async (user)=>{
   if(user){
     loginBtn.textContent="Log Out";
+    if(profileBtn) profileBtn.style.display="inline-flex";
     userPill.innerHTML=`<span class="status-dot"></span>Loading profile…`;
     try{
       await ensureAndWatchUserProfile(user);
@@ -2422,6 +2558,8 @@ onAuthStateChanged(auth, async (user)=>{
     };
     userPill.innerHTML=`<span class="status-dot" style="background:#8898aa"></span>Not signed in`;
     loginBtn.textContent="Log In";
+    if(profileBtn) profileBtn.style.display="none";
+    profileModal?.classList.remove("open");
     renderAll();
   }
 });
