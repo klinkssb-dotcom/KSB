@@ -371,7 +371,7 @@
           <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
             <div>
               <h2>Upcoming NFL Games</h2>
-              <div class="muted">Temporary lines shown below. Live odds are the next backend step.</div>
+              <div class="muted">Live NFL moneylines, spreads, and totals. Odds lock when you place the wager.</div>
             </div>
             <span class="chip green">Odds locked at placement</span>
           </div>
@@ -649,7 +649,7 @@
   </main>
 
   <div class="footer">
-    Firebase Authentication, user profiles, wagers, banking actions, standings, Tax Man, and the public ledger are connected to Firestore. Live odds, automatic settlements, Tuesday rollover, and trusted server-side enforcement are the next backend steps.
+    Firebase Authentication, Firestore league data, and live NFL odds are connected. Automatic score settlement, Tuesday rollover, parlays, and trusted server-side enforcement are the next backend steps.
   </div>
 </div>
 
@@ -746,44 +746,193 @@ const RULES = {
   TAX_MAN_RATE: 0.20
 };
 
-const demoGames = [
-  {
-    id:"g1", away:"Tampa Bay Buccaneers", home:"Cincinnati Bengals", time:"Sun 1:00 PM",
-    markets:[
-      {label:"TB +3.5", odds:-108, market:"spread"},
-      {label:"CIN -3.5", odds:-111, market:"spread"},
-      {label:"Over 50.5", odds:-108, market:"total"},
-      {label:"Under 50.5", odds:-111, market:"total"}
-    ]
-  },
-  {
-    id:"g2", away:"Buffalo Bills", home:"Houston Texans", time:"Sun 1:00 PM",
-    markets:[
-      {label:"BUF ML", odds:-124, market:"moneyline"},
-      {label:"HOU ML", odds:102, market:"moneyline"},
-      {label:"BUF -1.5", odds:-110, market:"spread"},
-      {label:"HOU +1.5", odds:-110, market:"spread"}
-    ]
-  },
-  {
-    id:"g3", away:"Green Bay Packers", home:"Minnesota Vikings", time:"Sun 4:25 PM",
-    markets:[
-      {label:"GB ML", odds:103, market:"moneyline"},
-      {label:"MIN ML", odds:-123, market:"moneyline"},
-      {label:"Over 46", odds:-113, market:"total"},
-      {label:"Under 46", odds:-105, market:"total"}
-    ]
-  },
-  {
-    id:"g4", away:"Denver Broncos", home:"Kansas City Chiefs", time:"Mon 8:15 PM",
-    markets:[
-      {label:"DEN +2.5", odds:-104, market:"spread"},
-      {label:"KC -2.5", odds:-115, market:"spread"},
-      {label:"DEN ML", odds:124, market:"moneyline"},
-      {label:"KC ML", odds:-145, market:"moneyline"}
-    ]
+const KSB_BACKEND_URL = "https://script.google.com/macros/s/AKfycbyRAf4aamN7IzN1s39PiJ7Zn0wZ7Zd434MuoFr43cenJ74v_fVbOTAQGbw8F8Q6KghQ3g/exec";
+
+let liveGames = [];
+let oddsUpdatedAt = null;
+let oddsLoadError = "";
+
+function formatGameTime_(iso){
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString([],{
+    weekday:"short",
+    hour:"numeric",
+    minute:"2-digit"
+  });
+}
+
+function currentNflWeekWindow_(){
+  const now=new Date();
+  const day=now.getDay();
+  const daysSinceTuesday=(day-2+7)%7;
+
+  const start=new Date(now);
+  start.setHours(0,0,0,0);
+  start.setDate(start.getDate()-daysSinceTuesday);
+
+  const end=new Date(start);
+  end.setDate(end.getDate()+7);
+
+  return {start,end};
+}
+
+function signedLine_(n){
+  const v=Number(n);
+  if(!Number.isFinite(v)) return "";
+  return v>0 ? `+${v}` : `${v}`;
+}
+
+function teamAbbr_(name){
+  const special={
+    "Los Angeles Chargers":"LAC",
+    "Los Angeles Rams":"LAR",
+    "Las Vegas Raiders":"LV",
+    "New England Patriots":"NE",
+    "New Orleans Saints":"NO",
+    "New York Giants":"NYG",
+    "New York Jets":"NYJ",
+    "San Francisco 49ers":"SF",
+    "Tampa Bay Buccaneers":"TB",
+    "Green Bay Packers":"GB",
+    "Kansas City Chiefs":"KC"
+  };
+  if(special[name]) return special[name];
+
+  const words=String(name||"").split(/\s+/).filter(Boolean);
+  if(words.length===1) return words[0].slice(0,3).toUpperCase();
+
+  const last=words[words.length-1];
+  const city=words.slice(0,-1);
+  const cityCode=city.map(w=>w[0]).join("");
+  return (cityCode + last[0]).slice(0,3).toUpperCase();
+}
+
+function normalizeBackendGame_(g){
+  const markets=[];
+
+  if(g.moneyline?.away!=null){
+    markets.push({
+      label:`${g.awayTeam} ML`,
+      shortLabel:`${teamAbbr_(g.awayTeam)} ML`,
+      odds:Number(g.moneyline.away),
+      market:"moneyline",
+      team:g.awayTeam,
+      point:null,
+      side:"away"
+    });
   }
-];
+
+  if(g.moneyline?.home!=null){
+    markets.push({
+      label:`${g.homeTeam} ML`,
+      shortLabel:`${teamAbbr_(g.homeTeam)} ML`,
+      odds:Number(g.moneyline.home),
+      market:"moneyline",
+      team:g.homeTeam,
+      point:null,
+      side:"home"
+    });
+  }
+
+  if(g.spread){
+    if(g.spread.awayPoint!=null && g.spread.awayOdds!=null){
+      markets.push({
+        label:`${g.awayTeam} ${signedLine_(g.spread.awayPoint)}`,
+        shortLabel:`${teamAbbr_(g.awayTeam)} ${signedLine_(g.spread.awayPoint)}`,
+        odds:Number(g.spread.awayOdds),
+        market:"spread",
+        team:g.awayTeam,
+        point:Number(g.spread.awayPoint),
+        side:"away"
+      });
+    }
+
+    if(g.spread.homePoint!=null && g.spread.homeOdds!=null){
+      markets.push({
+        label:`${g.homeTeam} ${signedLine_(g.spread.homePoint)}`,
+        shortLabel:`${teamAbbr_(g.homeTeam)} ${signedLine_(g.spread.homePoint)}`,
+        odds:Number(g.spread.homeOdds),
+        market:"spread",
+        team:g.homeTeam,
+        point:Number(g.spread.homePoint),
+        side:"home"
+      });
+    }
+  }
+
+  if(g.total){
+    if(g.total.point!=null && g.total.overOdds!=null){
+      markets.push({
+        label:`Over ${g.total.point}`,
+        shortLabel:`Over ${g.total.point}`,
+        odds:Number(g.total.overOdds),
+        market:"total",
+        team:"",
+        point:Number(g.total.point),
+        side:"over"
+      });
+    }
+
+    if(g.total.point!=null && g.total.underOdds!=null){
+      markets.push({
+        label:`Under ${g.total.point}`,
+        shortLabel:`Under ${g.total.point}`,
+        odds:Number(g.total.underOdds),
+        market:"total",
+        team:"",
+        point:Number(g.total.point),
+        side:"under"
+      });
+    }
+  }
+
+  return {
+    id:g.id,
+    away:g.awayTeam,
+    home:g.homeTeam,
+    commenceTime:g.commenceTime,
+    time:formatGameTime_(g.commenceTime),
+    markets
+  };
+}
+
+async function loadLiveOdds(){
+  oddsLoadError="";
+  const grid=document.getElementById("gamesGrid");
+  grid.innerHTML=`<div class="empty" style="grid-column:1/-1">Loading live NFL lines…</div>`;
+
+  try{
+    const response=await fetch(`${KSB_BACKEND_URL}?action=odds`,{cache:"no-store"});
+    if(!response.ok) throw new Error(`Backend HTTP ${response.status}`);
+
+    const data=await response.json();
+    if(!data.ok) throw new Error(data.error || "Odds backend returned an error.");
+
+    const {start,end}=currentNflWeekWindow_();
+    const now=Date.now();
+
+    liveGames=(data.games||[])
+      .map(normalizeBackendGame_)
+      .filter(g=>{
+        const t=new Date(g.commenceTime).getTime();
+        return Number.isFinite(t) &&
+               t>=start.getTime() &&
+               t<end.getTime() &&
+               t>now-6*60*60*1000;
+      })
+      .sort((a,b)=>new Date(a.commenceTime)-new Date(b.commenceTime));
+
+    oddsUpdatedAt=data.updatedAt || new Date().toISOString();
+    renderGames();
+
+  }catch(err){
+    console.error("Live odds failed",err);
+    oddsLoadError=err?.message || String(err);
+    liveGames=[];
+    renderGames();
+  }
+}
 
 let players = [];
 
@@ -850,35 +999,89 @@ document.querySelectorAll("#mainNav button").forEach(btn=>{
 
 function renderGames(){
   const grid=document.getElementById("gamesGrid");
-  grid.innerHTML=demoGames.map(g=>`
-    <div class="game">
-      <div class="game-head">
-        <div>
-          <strong>${g.away} @ ${g.home}</strong>
-          <div class="muted" style="font-size:12px">${g.time}</div>
-        </div>
-        <span class="chip green">Open</span>
-      </div>
-      ${g.markets.map(m=>`
-        <div class="teamline">
-          <span>${m.label}</span>
-          <button class="odds-btn" data-game="${g.id}" data-label="${m.label}" data-odds="${m.odds}" data-market="${m.market}">
-            ${m.odds>0?"+":""}${m.odds}
-          </button>
-        </div>
-      `).join("")}
-    </div>
-  `).join("");
+  const updatedLabel=document.getElementById("oddsUpdatedLabel");
 
-  grid.querySelectorAll(".odds-btn").forEach(btn=>{
+  if(updatedLabel){
+    updatedLabel.textContent=oddsUpdatedAt
+      ? `Lines updated ${new Date(oddsUpdatedAt).toLocaleString()}`
+      : "";
+  }
+
+  if(oddsLoadError){
+    grid.innerHTML=`
+      <div class="empty" style="grid-column:1/-1">
+        Live NFL lines could not be loaded.<br>
+        <span class="muted">${oddsLoadError}</span><br><br>
+        <button class="btn secondary" id="retryOddsBtn">Retry</button>
+      </div>`;
+    document.getElementById("retryOddsBtn")?.addEventListener("click",loadLiveOdds);
+    return;
+  }
+
+  if(!liveGames.length){
+    grid.innerHTML=`
+      <div class="empty" style="grid-column:1/-1">
+        No NFL games are currently available for this league week.
+        <br><br><button class="btn secondary" id="retryOddsBtn">Refresh Lines</button>
+      </div>`;
+    document.getElementById("retryOddsBtn")?.addEventListener("click",loadLiveOdds);
+    return;
+  }
+
+  const now=Date.now();
+
+  grid.innerHTML=liveGames.map(g=>{
+    const locked=now>=new Date(g.commenceTime).getTime();
+
+    return `
+      <div class="game">
+        <div class="game-head">
+          <div>
+            <strong>${g.away} @ ${g.home}</strong>
+            <div class="muted" style="font-size:12px">${g.time}</div>
+          </div>
+          <span class="chip ${locked?"":"green"}">${locked?"Locked":"Open"}</span>
+        </div>
+        ${g.markets.map((m,idx)=>`
+          <div class="teamline">
+            <span>${m.shortLabel}</span>
+            <button
+              class="odds-btn"
+              data-game="${g.id}"
+              data-market-index="${idx}"
+              ${locked?"disabled":""}>
+              ${m.odds>0?"+":""}${m.odds}
+            </button>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }).join("");
+
+  grid.querySelectorAll(".odds-btn:not([disabled])").forEach(btn=>{
     btn.addEventListener("click",()=>{
-      const g=demoGames.find(x=>x.id===btn.dataset.game);
+      const g=liveGames.find(x=>x.id===btn.dataset.game);
+      const m=g?.markets?.[Number(btn.dataset.marketIndex)];
+      if(!g || !m) return;
+
+      if(Date.now()>=new Date(g.commenceTime).getTime()){
+        alert("That game has already started.");
+        renderGames();
+        return;
+      }
+
       selectedBet={
         gameId:g.id,
         game:`${g.away} @ ${g.home}`,
-        selection:btn.dataset.label,
-        odds:Number(btn.dataset.odds),
-        market:btn.dataset.market
+        awayTeam:g.away,
+        homeTeam:g.home,
+        commenceTime:g.commenceTime,
+        selection:m.label,
+        odds:Number(m.odds),
+        market:m.market,
+        team:m.team || "",
+        point:m.point ?? null,
+        side:m.side || ""
       };
       renderSlip();
     });
@@ -927,6 +1130,8 @@ function updateSlipPreview(){
 });
 
 function validateBet(stake,betType,power){
+  if(!selectedBet) return "Select a wager first.";
+  if(selectedBet.commenceTime && Date.now()>=new Date(selectedBet.commenceTime).getTime()) return "That game has already started.";
   if(currentUser.betsThisWeek>=RULES.MAX_BETS_PER_WEEK) return "You have already used all 10 wagers this week.";
   if(stake>currentUser.cash) return "Not enough cash. Borrow before placing this wager.";
   if(betType==="normal" && (stake<RULES.NORMAL_BET_MIN || stake>RULES.NORMAL_BET_MAX))
@@ -974,6 +1179,10 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
       const cash=Number(u.cash||0);
       const betsThisWeek=Number(u.betsThisWeek||0);
 
+      if(selectedBet.commenceTime && Date.now()>=new Date(selectedBet.commenceTime).getTime()){
+        throw new Error("That game has already started.");
+      }
+
       if(betsThisWeek>=RULES.MAX_BETS_PER_WEEK) throw new Error("You have already used all 10 wagers this week.");
       if(stake>cash) throw new Error("Not enough cash. Borrow before placing this wager.");
       if(betType==="big" && Boolean(u.bigBetUsed)) throw new Error("You already used your Big Bet this week.");
@@ -995,8 +1204,14 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
         player:u.displayName || currentUser.name,
         gameId:selectedBet.gameId,
         game:selectedBet.game,
+        awayTeam:selectedBet.awayTeam || "",
+        homeTeam:selectedBet.homeTeam || "",
+        commenceTime:selectedBet.commenceTime || "",
         selection:selectedBet.selection,
         market:selectedBet.market,
+        team:selectedBet.team || "",
+        point:selectedBet.point ?? null,
+        side:selectedBet.side || "",
         stake,
         odds:selectedBet.odds,
         betType,
@@ -1594,7 +1809,7 @@ function renderAll(){
   renderDashboardFeed();
 }
 
-renderGames();
+loadLiveOdds();
 renderNotifications();
 renderDashboardFeed();
 renderAll();
