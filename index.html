@@ -649,7 +649,7 @@
   </main>
 
   <div class="footer">
-    Demo frontend. Authentication, live odds, settlements, and persistent league data should be connected to Firebase + backend API.
+    Firebase Authentication is connected. Live odds, settlements, balances, league data, and server-side authorization still need backend integration.
   </div>
 </div>
 
@@ -669,7 +669,8 @@
       <label>Password</label>
       <input id="passwordInput" type="password" placeholder="••••••••" />
     </div>
-    <button class="btn" id="emailLoginBtn" style="width:100%;margin-top:14px">Log In / Create Account</button>
+    <button class="btn" id="emailLoginBtn" style="width:100%;margin-top:14px">Log In</button>
+    <button class="btn secondary" id="emailSignupBtn" style="width:100%;margin-top:8px">Create Account</button>
     <button class="btn secondary" id="closeLoginBtn" style="width:100%;margin-top:8px">Close</button>
   </div>
 </div>
@@ -685,7 +686,32 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_xE167TWQ6NVFUgzxSEXDzAsIft5lJG0",
+  authDomain: "ksb1-c1d48.firebaseapp.com",
+  projectId: "ksb1-c1d48",
+  storageBucket: "ksb1-c1d48.firebasestorage.app",
+  messagingSenderId: "134263232365",
+  appId: "1:134263232365:web:a6b2ce207520b64292ac64",
+  measurementId: "G-NZ2DVVDGRD"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
+
 /* ============================================================
    KLINK SPORTSBOOK LEAGUE — FRONTEND DEMO
    ------------------------------------------------------------
@@ -1118,19 +1144,89 @@ document.getElementById("confirmRepayBtn").addEventListener("click",()=>{
 });
 
 const loginModal=document.getElementById("loginModal");
-document.getElementById("loginBtn").addEventListener("click",()=>loginModal.classList.add("open"));
+const loginBtn=document.getElementById("loginBtn");
+const userPill=document.getElementById("userPill");
+
+loginBtn.addEventListener("click", async ()=>{
+  if(auth.currentUser){
+    if(confirm(`Log out ${auth.currentUser.email || auth.currentUser.displayName || "this account"}?`)){
+      try{
+        await signOut(auth);
+      }catch(err){
+        console.error(err);
+        alert("Could not log out: " + friendlyAuthError(err));
+      }
+    }
+    return;
+  }
+  loginModal.classList.add("open");
+});
+
 document.getElementById("closeLoginBtn").addEventListener("click",()=>loginModal.classList.remove("open"));
 
-function demoLogin(){
-  const email=document.getElementById("emailInput").value.trim();
-  const name=email ? email.split("@")[0] : "Chris";
-  document.getElementById("userPill").innerHTML=`<span class="status-dot"></span>${name}`;
-  document.getElementById("loginBtn").textContent="Account";
-  loginModal.classList.remove("open");
-  alert("Demo login only. Firebase Authentication will replace this action.");
+function friendlyAuthError(err){
+  const code=String(err?.code||"");
+  const map={
+    "auth/invalid-email":"That email address is not valid.",
+    "auth/missing-password":"Enter your password.",
+    "auth/weak-password":"Use a stronger password (at least 6 characters).",
+    "auth/email-already-in-use":"An account already exists for that email.",
+    "auth/user-disabled":"This account has been disabled.",
+    "auth/invalid-credential":"Email or password is incorrect.",
+    "auth/popup-closed-by-user":"Google sign-in was closed before it finished.",
+    "auth/popup-blocked":"Your browser blocked the Google sign-in popup. Allow popups for this site and try again.",
+    "auth/unauthorized-domain":"This site is not listed in Firebase Authorized domains."
+  };
+  return map[code] || err?.message || "Authentication failed.";
 }
-document.getElementById("emailLoginBtn").addEventListener("click",demoLogin);
-document.getElementById("googleLoginBtn").addEventListener("click",demoLogin);
+
+document.getElementById("googleLoginBtn").addEventListener("click", async ()=>{
+  try{
+    await signInWithPopup(auth,googleProvider);
+    loginModal.classList.remove("open");
+  }catch(err){
+    console.error(err);
+    alert(friendlyAuthError(err));
+  }
+});
+
+document.getElementById("emailLoginBtn").addEventListener("click", async ()=>{
+  const email=document.getElementById("emailInput").value.trim();
+  const password=document.getElementById("passwordInput").value;
+  try{
+    await signInWithEmailAndPassword(auth,email,password);
+    loginModal.classList.remove("open");
+  }catch(err){
+    console.error(err);
+    alert(friendlyAuthError(err));
+  }
+});
+
+document.getElementById("emailSignupBtn").addEventListener("click", async ()=>{
+  const email=document.getElementById("emailInput").value.trim();
+  const password=document.getElementById("passwordInput").value;
+  try{
+    await createUserWithEmailAndPassword(auth,email,password);
+    loginModal.classList.remove("open");
+    alert("Account created. You are now signed in.");
+  }catch(err){
+    console.error(err);
+    alert(friendlyAuthError(err));
+  }
+});
+
+onAuthStateChanged(auth,(user)=>{
+  if(user){
+    const display=user.displayName || user.email?.split("@")[0] || "Player";
+    currentUser.name=display;
+    userPill.innerHTML=`<span class="status-dot"></span>${display}`;
+    loginBtn.textContent="Log Out";
+  }else{
+    userPill.innerHTML=`<span class="status-dot" style="background:#8898aa"></span>Not signed in`;
+    loginBtn.textContent="Log In";
+  }
+  renderAll();
+});
 
 function renderAll(){
   renderAccountMetrics();
