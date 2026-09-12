@@ -371,7 +371,7 @@
           <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
             <div>
               <h2>Upcoming NFL Games</h2>
-              <div class="muted">Demo lines shown below. Backend can replace these with live odds.</div>
+              <div class="muted">Temporary lines shown below. Live odds are the next backend step.</div>
             </div>
             <span class="chip green">Odds locked at placement</span>
           </div>
@@ -649,14 +649,14 @@
   </main>
 
   <div class="footer">
-    Firebase Authentication and Firestore user profiles are connected. Bets, settlements, balances, transactions, power-ups, and server-side authorization still need backend integration.
+    Firebase Authentication, user profiles, wagers, banking actions, standings, Tax Man, and the public ledger are connected to Firestore. Live odds, automatic settlements, Tuesday rollover, and trusted server-side enforcement are the next backend steps.
   </div>
 </div>
 
 <div class="modal" id="loginModal">
   <div class="modal-panel">
     <h2>League Account</h2>
-    <p class="muted">Demo login UI. Replace the handler with Firebase Authentication when the project is connected.</p>
+    <p class="muted">Sign in with Google or use an email/password account.</p>
     <div class="tabs-mini">
       <button class="btn" id="googleLoginBtn">Continue with Google</button>
     </div>
@@ -702,7 +702,9 @@ import {
   doc,
   getDoc,
   setDoc,
-  onSnapshot
+  onSnapshot,
+  collection,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -783,14 +785,7 @@ const demoGames = [
   }
 ];
 
-const players = [
-  {name:"Jared", cash:2310, principal:0, interestOwed:0, interestPaid:0, wins:8, losses:5, roi:18.2, peak:2540, low:1900, big:"2-0", tax:52},
-  {name:"Sara", cash:2175, principal:0, interestOwed:0, interestPaid:0, wins:7, losses:6, roi:11.1, peak:2280, low:1810, big:"1-1", tax:188},
-  {name:"Chris", cash:2082, principal:0, interestOwed:0, interestPaid:0, wins:6, losses:5, roi:7.8, peak:2210, low:1930, big:"1-0", tax:34},
-  {name:"John", cash:1980, principal:0, interestOwed:0, interestPaid:0, wins:5, losses:5, roi:-1.0, peak:2075, low:1890, big:"0-1", tax:0},
-  {name:"Leah", cash:1710, principal:1000, interestOwed:0, interestPaid:100, wins:4, losses:7, roi:-8.1, peak:2050, low:710, big:"1-2", tax:18},
-  {name:"Mike", cash:880, principal:2000, interestOwed:0, interestPaid:300, wins:3, losses:9, roi:-22.8, peak:2020, low:-1120, big:"0-2", tax:0}
-].map(p => ({...p, net:p.cash-p.principal-p.interestOwed}));
+let players = [];
 
 let currentUser = {
   uid:"",
@@ -814,18 +809,12 @@ let currentUser = {
 let stopUserProfileListener = null;
 
 let selectedBet = null;
-let openBets = [
-  {player:"Jared", bet:"Bills ML", stake:100, odds:130, power:"Big Boost", status:"OPEN", taxEligible:true},
-  {player:"Sara", bet:"Bengals -3.5", stake:75, odds:-110, power:"None", status:"OPEN", taxEligible:true},
-  {player:"Mike", bet:"Chiefs -2.5", stake:180, odds:-115, power:"BIG BET — TAX EXEMPT", status:"OPEN", taxEligible:false}
-];
+let openBets = [];
+let ledger = [];
 
-let ledger = [
-  {time:"Sun 12:41 PM",player:"Jared",type:"BET",amount:-100,cash:2210,principal:0,interest:0,net:2210,note:"Bills ML +130 — Big Boost"},
-  {time:"Sun 12:44 PM",player:"Sara",type:"TAX MAN",amount:0,cash:2175,principal:0,interest:0,net:2175,note:"Tax Man attached to Jared's Bills wager"},
-  {time:"Mon 8:05 PM",player:"Mike",type:"LOAN",amount:1000,cash:880,principal:2000,interest:0,net:-1120,note:"Weekly $1,000 loan"},
-  {time:"Tue 7:00 AM",player:"Mike",type:"INTEREST",amount:-100,cash:0,principal:2000,interest:100,net:-2100,note:"Weekly interest assessed; insufficient cash to auto-pay full amount"}
-];
+let stopBetsListener = null;
+let stopLedgerListener = null;
+let stopUsersListener = null;
 
 const notifications = [
   {unread:true,title:"Tax Man attached",body:"Sara used Tax Man on Jared's Bills ML wager."},
@@ -937,94 +926,204 @@ function updateSlipPreview(){
   document.getElementById(id).addEventListener("change",updateSlipPreview);
 });
 
-function validateBet(stake,betType){
+function validateBet(stake,betType,power){
   if(currentUser.betsThisWeek>=RULES.MAX_BETS_PER_WEEK) return "You have already used all 10 wagers this week.";
   if(stake>currentUser.cash) return "Not enough cash. Borrow before placing this wager.";
   if(betType==="normal" && (stake<RULES.NORMAL_BET_MIN || stake>RULES.NORMAL_BET_MAX))
     return `Normal wagers must be $${RULES.NORMAL_BET_MIN}–$${RULES.NORMAL_BET_MAX}.`;
   if(betType==="big" && (stake<RULES.BIG_BET_MIN || stake>RULES.BIG_BET_MAX))
     return `Big Bets must be $${RULES.BIG_BET_MIN}–$${RULES.BIG_BET_MAX}.`;
+  if(betType==="big" && currentUser.bigBetUsed) return "You already used your Big Bet this week.";
+  if(betType==="big" && power!=="none") return "Big Bets cannot be boosted.";
+  if(power==="small" && currentUser.smallBoostUsed) return "You already used your Small Boost this week.";
+  if(power==="big" && currentUser.bigBoostUsed) return "You already used your Big Boost this week.";
   return "";
 }
 
-document.getElementById("placeBetBtn").addEventListener("click",()=>{
+document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
   if(!auth.currentUser){alert("Log in before placing a wager.");return;}
   if(!selectedBet) return;
+
+  const button=document.getElementById("placeBetBtn");
   const stake=Number(document.getElementById("stakeInput").value||0);
   const betType=document.getElementById("betTypeSelect").value;
   const power=document.getElementById("powerSelect").value;
-  const error=validateBet(stake,betType);
+  const error=validateBet(stake,betType,power);
   if(error){ alert(error); return; }
 
-  currentUser.cash-=stake;
-  currentUser.betsThisWeek++;
   const powerLabel = betType==="big"
     ? "BIG BET — TAX EXEMPT"
     : power==="small" ? "Small Boost"
     : power==="big" ? "Big Boost"
     : "None";
 
-  openBets.unshift({
-    player:currentUser.name,
-    bet:selectedBet.selection,
-    stake,
-    odds:selectedBet.odds,
-    power:powerLabel,
-    status:"OPEN",
-    taxEligible:betType!=="big"
-  });
+  const userRef=doc(db,"users",auth.currentUser.uid);
+  const betRef=doc(collection(db,"bets"));
+  const txRef=doc(collection(db,"transactions"));
+  const now=Date.now();
 
-  ledger.unshift({
-    time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
-    player:currentUser.name,
-    type:"BET",
-    amount:-stake,
-    cash:currentUser.cash,
-    principal:currentUser.principal,
-    interest:currentUser.interestOwed,
-    net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
-    note:`${selectedBet.selection} ${(selectedBet.odds>0?"+":"")+selectedBet.odds}${powerLabel!=="None"?" — "+powerLabel:""}`
-  });
+  button.disabled=true;
+  button.textContent="Saving…";
 
-  renderAll();
-  alert("Wager placed in demo mode.");
+  try{
+    await runTransaction(db, async (tx)=>{
+      const userSnap=await tx.get(userRef);
+      if(!userSnap.exists()) throw new Error("League profile not found.");
+
+      const u=userSnap.data();
+      const cash=Number(u.cash||0);
+      const betsThisWeek=Number(u.betsThisWeek||0);
+
+      if(betsThisWeek>=RULES.MAX_BETS_PER_WEEK) throw new Error("You have already used all 10 wagers this week.");
+      if(stake>cash) throw new Error("Not enough cash. Borrow before placing this wager.");
+      if(betType==="big" && Boolean(u.bigBetUsed)) throw new Error("You already used your Big Bet this week.");
+      if(power==="small" && Boolean(u.smallBoostUsed)) throw new Error("You already used your Small Boost this week.");
+      if(power==="big" && Boolean(u.bigBoostUsed)) throw new Error("You already used your Big Boost this week.");
+
+      const updates={
+        cash: cash-stake,
+        betsThisWeek: betsThisWeek+1
+      };
+      if(betType==="big") updates.bigBetUsed=true;
+      if(power==="small") updates.smallBoostUsed=true;
+      if(power==="big") updates.bigBoostUsed=true;
+
+      tx.update(userRef,updates);
+
+      tx.set(betRef,{
+        userId:auth.currentUser.uid,
+        player:u.displayName || currentUser.name,
+        gameId:selectedBet.gameId,
+        game:selectedBet.game,
+        selection:selectedBet.selection,
+        market:selectedBet.market,
+        stake,
+        odds:selectedBet.odds,
+        betType,
+        power,
+        powerLabel,
+        status:"OPEN",
+        taxEligible:betType!=="big",
+        taxedByUid:"",
+        taxedByName:"",
+        taxRate:0,
+        createdAtMs:now
+      });
+
+      const principal=Number(u.principalOwed||0);
+      const interest=Number(u.interestOwed||0);
+      const cashAfter=cash-stake;
+
+      tx.set(txRef,{
+        userId:auth.currentUser.uid,
+        player:u.displayName || currentUser.name,
+        type:"BET",
+        amount:-stake,
+        cashAfter,
+        principalOwed:principal,
+        interestOwed:interest,
+        netWorth:cashAfter-principal-interest,
+        note:`${selectedBet.selection} ${(selectedBet.odds>0?"+":"")+selectedBet.odds}${powerLabel!=="None"?" — "+powerLabel:""}`,
+        relatedBetId:betRef.id,
+        createdAtMs:now
+      });
+    });
+
+    alert("Wager saved to the league.");
+  }catch(err){
+    console.error(err);
+    alert(err?.message || "Could not place wager.");
+  }finally{
+    button.disabled=false;
+    button.textContent="Place Wager";
+  }
 });
 
 function renderOpenBets(){
   const body=document.getElementById("openBetsBody");
-  body.innerHTML=openBets.map((b,i)=>`
+  const rows=openBets.filter(b=>String(b.status||"OPEN").toUpperCase()==="OPEN");
+
+  body.innerHTML=rows.length ? rows.map((b,i)=>`
     <tr>
-      <td>${b.player}</td>
-      <td>${b.bet}</td>
+      <td>${b.player||"Player"}</td>
+      <td>${b.selection||b.bet||"Wager"}</td>
       <td>${money(b.stake)}</td>
-      <td>${b.odds>0?"+":""}${b.odds}</td>
-      <td><span class="chip ${b.power.includes("BIG BET")?"gold":b.power.includes("Boost")?"blue":""}">${b.power}</span></td>
-      <td><span class="chip green">${b.status}</span></td>
+      <td>${Number(b.odds)>0?"+":""}${b.odds}</td>
+      <td><span class="chip ${(b.powerLabel||"").includes("BIG BET")?"gold":(b.powerLabel||"").includes("Boost")?"blue":""}">${b.powerLabel||"None"}</span></td>
+      <td><span class="chip green">${b.status||"OPEN"}</span></td>
       <td>
-        ${b.taxEligible && b.player!==currentUser.name
-          ? `<button class="btn secondary tax-btn" data-index="${i}">Use Tax Man</button>`
-          : `<span class="muted">${b.taxEligible?"Own wager":"Tax Exempt"}</span>`}
+        ${b.taxEligible && b.userId!==auth.currentUser?.uid && !b.taxedByUid
+          ? `<button class="btn secondary tax-btn" data-id="${b.id}">Use Tax Man</button>`
+          : `<span class="muted">${!b.taxEligible?"Tax Exempt":b.taxedByUid?"Taxed":"Own wager"}</span>`}
       </td>
     </tr>
-  `).join("");
+  `).join("") : `<tr><td colspan="7"><div class="empty">No open league wagers yet.</div></td></tr>`;
 
   body.querySelectorAll(".tax-btn").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const b=openBets[Number(btn.dataset.index)];
-      if(!confirm(`Use Tax Man on ${b.player}'s ${b.bet}? This locks immediately.`)) return;
-      ledger.unshift({
-        time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
-        player:currentUser.name,
-        type:"TAX MAN",
-        amount:0,
-        cash:currentUser.cash,
-        principal:currentUser.principal,
-        interest:currentUser.interestOwed,
-        net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
-        note:`Tax Man attached to ${b.player}'s ${b.bet}`
-      });
-      alert("Tax Man attached in demo mode.");
-      renderLedger();
+    btn.addEventListener("click",async ()=>{
+      if(!auth.currentUser){alert("Log in first.");return;}
+      if(currentUser.taxManUsed){alert("You already used Tax Man this week.");return;}
+
+      const b=openBets.find(x=>x.id===btn.dataset.id);
+      if(!b) return;
+      if(!confirm(`Use Tax Man on ${b.player}'s ${b.selection}? This locks immediately.`)) return;
+
+      const userRef=doc(db,"users",auth.currentUser.uid);
+      const betRef=doc(db,"bets",b.id);
+      const txRef=doc(collection(db,"transactions"));
+      const now=Date.now();
+
+      btn.disabled=true;
+      btn.textContent="Saving…";
+
+      try{
+        await runTransaction(db,async tx=>{
+          const userSnap=await tx.get(userRef);
+          const betSnap=await tx.get(betRef);
+          if(!userSnap.exists() || !betSnap.exists()) throw new Error("User or wager no longer exists.");
+
+          const u=userSnap.data();
+          const liveBet=betSnap.data();
+
+          if(Boolean(u.taxManUsed)) throw new Error("You already used Tax Man this week.");
+          if(liveBet.userId===auth.currentUser.uid) throw new Error("You cannot use Tax Man on your own wager.");
+          if(!liveBet.taxEligible) throw new Error("That wager is tax-exempt.");
+          if(liveBet.taxedByUid) throw new Error("That wager already has Tax Man attached.");
+          if(String(liveBet.status||"").toUpperCase()!=="OPEN") throw new Error("Only open wagers can be taxed.");
+
+          tx.update(userRef,{taxManUsed:true});
+          tx.update(betRef,{
+            taxedByUid:auth.currentUser.uid,
+            taxedByName:u.displayName || currentUser.name,
+            taxRate:RULES.TAX_MAN_RATE,
+            taxedAtMs:now
+          });
+
+          const cash=Number(u.cash||0);
+          const principal=Number(u.principalOwed||0);
+          const interest=Number(u.interestOwed||0);
+
+          tx.set(txRef,{
+            userId:auth.currentUser.uid,
+            player:u.displayName || currentUser.name,
+            type:"TAX MAN",
+            amount:0,
+            cashAfter:cash,
+            principalOwed:principal,
+            interestOwed:interest,
+            netWorth:cash-principal-interest,
+            note:`Tax Man attached to ${liveBet.player}'s ${liveBet.selection}`,
+            relatedBetId:b.id,
+            createdAtMs:now
+          });
+        });
+        alert("Tax Man attached.");
+      }catch(err){
+        console.error(err);
+        alert(err?.message || "Could not attach Tax Man.");
+      }finally{
+        btn.disabled=false;
+      }
     });
   });
 }
@@ -1032,7 +1131,8 @@ function renderOpenBets(){
 function renderStandings(){
   const body=document.getElementById("standingsBody");
   const sorted=[...players].sort((a,b)=>b.net-a.net);
-  body.innerHTML=sorted.map((p,i)=>`
+
+  body.innerHTML=sorted.length ? sorted.map((p,i)=>`
     <tr>
       <td class="rank">${i+1}</td>
       <td><strong>${p.name}</strong></td>
@@ -1041,22 +1141,19 @@ function renderStandings(){
       <td>${money(p.principal)}</td>
       <td>${money(p.interestOwed)}</td>
       <td>${money(p.interestPaid)}</td>
-      <td>${p.wins}-${p.losses}</td>
-      <td class="${p.roi>=0?"green":"red"}">${p.roi>0?"+":""}${p.roi}%</td>
+      <td>${p.wins||0}-${p.losses||0}</td>
+      <td class="${(p.roi||0)>=0?"green":"red"}">${(p.roi||0)>0?"+":""}${Number(p.roi||0).toFixed(1)}%</td>
       <td>${money(p.peak)}</td>
       <td>${money(p.low)}</td>
-      <td>${p.big}</td>
-      <td>${money(p.tax)}</td>
+      <td>${p.big||"0-0"}</td>
+      <td>${money(p.tax||0)}</td>
     </tr>
-  `).join("");
+  `).join("") : `<tr><td colspan="13"><div class="empty">No league members loaded yet.</div></td></tr>`;
 
   const filter=document.getElementById("ledgerPlayerFilter");
-  if(filter.options.length===1){
-    players.forEach(p=>{
-      const opt=document.createElement("option");
-      opt.value=p.name; opt.textContent=p.name; filter.appendChild(opt);
-    });
-  }
+  const selected=filter.value;
+  filter.innerHTML=`<option value="">All Players</option>` + players.map(p=>`<option value="${p.name}">${p.name}</option>`).join("");
+  if([...filter.options].some(o=>o.value===selected)) filter.value=selected;
 }
 
 function renderLedger(){
@@ -1064,12 +1161,18 @@ function renderLedger(){
   const typeFilter=document.getElementById("ledgerTypeFilter").value;
   const rows=ledger.filter(x=>(!playerFilter||x.player===playerFilter)&&(!typeFilter||x.type===typeFilter));
   const body=document.getElementById("ledgerBody");
+
   body.innerHTML=rows.length?rows.map(x=>`
     <tr>
-      <td>${x.time}</td><td>${x.player}</td><td><span class="chip">${x.type}</span></td>
-      <td class="${x.amount>0?"green":x.amount<0?"red":""}">${signedMoney(x.amount)}</td>
-      <td>${money(x.cash)}</td><td>${money(x.principal)}</td><td>${money(x.interest)}</td>
-      <td class="${x.net>=0?"green":"red"}">${money(x.net)}</td><td>${x.note}</td>
+      <td>${x.timeLabel||new Date(Number(x.createdAtMs||0)).toLocaleString()}</td>
+      <td>${x.player||"Player"}</td>
+      <td><span class="chip">${x.type||"TRANSACTION"}</span></td>
+      <td class="${Number(x.amount)>0?"green":Number(x.amount)<0?"red":""}">${signedMoney(Number(x.amount||0))}</td>
+      <td>${money(x.cashAfter)}</td>
+      <td>${money(x.principalOwed)}</td>
+      <td>${money(x.interestOwed)}</td>
+      <td class="${Number(x.netWorth)>=0?"green":"red"}">${money(x.netWorth)}</td>
+      <td>${x.note||""}</td>
     </tr>
   `).join(""):`<tr><td colspan="9"><div class="empty">No matching transactions.</div></td></tr>`;
 }
@@ -1093,19 +1196,14 @@ function renderNotifications(){
 }
 
 function renderDashboardFeed(){
-  const items=[
-    ["J","Jared","placed $100 on Bills ML with Big Boost","2 min ago"],
-    ["S","Sara","used Tax Man on Jared's Bills wager","1 min ago"],
-    ["M","Mike","took his weekly $1,000 loan","Yesterday"],
-    ["C","Chris","has not used his Big Bet yet","This week"]
-  ];
-  document.getElementById("dashboardFeed").innerHTML=items.map(i=>`
+  const latest=ledger.slice(0,4);
+  document.getElementById("dashboardFeed").innerHTML=latest.length ? latest.map(x=>`
     <div class="feed-item">
-      <div class="avatar">${i[0]}</div>
-      <div><strong>${i[1]}</strong><div>${i[2]}</div></div>
-      <div class="feed-time">${i[3]}</div>
+      <div class="avatar">${String(x.player||"?").charAt(0).toUpperCase()}</div>
+      <div><strong>${x.player||"Player"}</strong><div>${x.note||x.type||"League activity"}</div></div>
+      <div class="feed-time">${new Date(Number(x.createdAtMs||Date.now())).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</div>
     </div>
-  `).join("");
+  `).join("") : `<div class="empty">No league activity yet.</div>`;
 }
 
 function renderAccountMetrics(){
@@ -1118,50 +1216,120 @@ function renderAccountMetrics(){
   document.getElementById("netMetric").textContent=money(currentUser.cash-totalDebt);
   document.getElementById("betCountMetric").textContent=currentUser.betsThisWeek;
   document.getElementById("loanStatusMetric").textContent=currentUser.loanUsed?"Used":"Available";
-  document.getElementById("borrowBtn").disabled=currentUser.loanUsed;
+  document.getElementById("borrowBtn").disabled=currentUser.loanUsed || !auth.currentUser;
+
+  const powerCards=[...document.querySelectorAll(".power")];
+  if(powerCards[0]) powerCards[0].querySelector(".chip").textContent=currentUser.smallBoostUsed?"Used":"Available";
+  if(powerCards[1]) powerCards[1].querySelector(".chip").textContent=currentUser.bigBoostUsed?"Used":"Available";
+  if(powerCards[2]) powerCards[2].querySelector(".chip").textContent=currentUser.taxManUsed?"Used":"Available";
 }
 
-document.getElementById("borrowBtn").addEventListener("click",()=>{
+document.getElementById("borrowBtn").addEventListener("click",async ()=>{
   if(!auth.currentUser){alert("Log in before using league banking.");return;}
   if(currentUser.loanUsed){alert("You already took your one loan for this NFL week.");return;}
   if(!confirm("Borrow $1,000? You can only take one loan this NFL week.")) return;
-  currentUser.cash+=RULES.LOAN_AMOUNT;
-  currentUser.principal+=RULES.LOAN_AMOUNT;
-  currentUser.loanUsed=true;
-  ledger.unshift({
-    time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
-    player:currentUser.name,type:"LOAN",amount:RULES.LOAN_AMOUNT,cash:currentUser.cash,
-    principal:currentUser.principal,interest:currentUser.interestOwed,
-    net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
-    note:"Weekly fixed $1,000 loan"
-  });
-  renderAll();
+
+  const userRef=doc(db,"users",auth.currentUser.uid);
+  const txRef=doc(collection(db,"transactions"));
+  const now=Date.now();
+
+  try{
+    await runTransaction(db,async tx=>{
+      const snap=await tx.get(userRef);
+      if(!snap.exists()) throw new Error("League profile not found.");
+      const u=snap.data();
+      if(Boolean(u.loanUsed)) throw new Error("You already took your one loan for this NFL week.");
+
+      const cash=Number(u.cash||0)+RULES.LOAN_AMOUNT;
+      const principal=Number(u.principalOwed||0)+RULES.LOAN_AMOUNT;
+      const interest=Number(u.interestOwed||0);
+
+      tx.update(userRef,{
+        cash,
+        principalOwed:principal,
+        loanUsed:true
+      });
+
+      tx.set(txRef,{
+        userId:auth.currentUser.uid,
+        player:u.displayName || currentUser.name,
+        type:"LOAN",
+        amount:RULES.LOAN_AMOUNT,
+        cashAfter:cash,
+        principalOwed:principal,
+        interestOwed:interest,
+        netWorth:cash-principal-interest,
+        note:"Weekly fixed $1,000 loan",
+        createdAtMs:now
+      });
+    });
+  }catch(err){
+    console.error(err);
+    alert(err?.message || "Could not take loan.");
+  }
 });
 
 const repayModal=document.getElementById("repayModal");
 document.getElementById("repayBtn").addEventListener("click",()=>repayModal.classList.add("open"));
 document.getElementById("closeRepayBtn").addEventListener("click",()=>repayModal.classList.remove("open"));
-document.getElementById("confirmRepayBtn").addEventListener("click",()=>{
-  let amount=Number(document.getElementById("repayAmount").value||0);
-  const total=currentUser.principal+currentUser.interestOwed;
-  if(amount<=0||amount>currentUser.cash){alert("Enter a valid repayment amount within your available cash.");return;}
-  amount=Math.min(amount,total);
-  if(amount<=0){alert("You do not owe anything.");return;}
-  const paidInterest=Math.min(currentUser.interestOwed,amount);
-  currentUser.interestOwed-=paidInterest;
-  currentUser.interestPaid+=paidInterest;
-  let remaining=amount-paidInterest;
-  currentUser.principal=Math.max(0,currentUser.principal-remaining);
-  currentUser.cash-=amount;
-  ledger.unshift({
-    time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
-    player:currentUser.name,type:"REPAYMENT",amount:-amount,cash:currentUser.cash,
-    principal:currentUser.principal,interest:currentUser.interestOwed,
-    net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
-    note:`Debt repayment; ${money(paidInterest)} applied to interest first`
-  });
-  repayModal.classList.remove("open");
-  renderAll();
+document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
+  if(!auth.currentUser){alert("Log in first.");return;}
+  const requested=Number(document.getElementById("repayAmount").value||0);
+  if(requested<=0){alert("Enter a valid repayment amount.");return;}
+
+  const userRef=doc(db,"users",auth.currentUser.uid);
+  const txRef=doc(collection(db,"transactions"));
+  const now=Date.now();
+
+  try{
+    await runTransaction(db,async tx=>{
+      const snap=await tx.get(userRef);
+      if(!snap.exists()) throw new Error("League profile not found.");
+      const u=snap.data();
+
+      const cash=Number(u.cash||0);
+      let interest=Number(u.interestOwed||0);
+      let principal=Number(u.principalOwed||0);
+      const total=interest+principal;
+
+      if(total<=0) throw new Error("You do not owe anything.");
+      if(requested>cash) throw new Error("Not enough cash for that repayment.");
+
+      const amount=Math.min(requested,total);
+      const paidInterest=Math.min(interest,amount);
+      interest-=paidInterest;
+      const principalPayment=amount-paidInterest;
+      principal=Math.max(0,principal-principalPayment);
+      const cashAfter=cash-amount;
+      const interestPaid=Number(u.interestPaid||0)+paidInterest;
+
+      tx.update(userRef,{
+        cash:cashAfter,
+        principalOwed:principal,
+        interestOwed:interest,
+        interestPaid
+      });
+
+      tx.set(txRef,{
+        userId:auth.currentUser.uid,
+        player:u.displayName || currentUser.name,
+        type:"REPAYMENT",
+        amount:-amount,
+        cashAfter,
+        principalOwed:principal,
+        interestOwed:interest,
+        netWorth:cashAfter-principal-interest,
+        note:`Debt repayment; ${money(paidInterest)} applied to interest first`,
+        createdAtMs:now
+      });
+    });
+
+    repayModal.classList.remove("open");
+    document.getElementById("repayAmount").value="";
+  }catch(err){
+    console.error(err);
+    alert(err?.message || "Could not repay debt.");
+  }
 });
 
 const loginModal=document.getElementById("loginModal");
@@ -1317,12 +1485,69 @@ async function ensureAndWatchUserProfile(user){
   });
 }
 
+
+function stopLeagueListeners(){
+  if(stopBetsListener){stopBetsListener();stopBetsListener=null;}
+  if(stopLedgerListener){stopLedgerListener();stopLedgerListener=null;}
+  if(stopUsersListener){stopUsersListener();stopUsersListener=null;}
+}
+
+function startLeagueListeners(){
+  stopLeagueListeners();
+
+  stopBetsListener=onSnapshot(collection(db,"bets"),snap=>{
+    openBets=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
+    renderOpenBets();
+  },err=>{
+    console.error("Bets listener failed",err);
+  });
+
+  stopLedgerListener=onSnapshot(collection(db,"transactions"),snap=>{
+    ledger=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
+    renderLedger();
+    renderDashboardFeed();
+  },err=>{
+    console.error("Transactions listener failed",err);
+  });
+
+  stopUsersListener=onSnapshot(collection(db,"users"),snap=>{
+    players=snap.docs.map(d=>{
+      const u=d.data();
+      const cash=Number(u.cash||0);
+      const principal=Number(u.principalOwed||0);
+      const interestOwed=Number(u.interestOwed||0);
+      return {
+        id:d.id,
+        name:u.displayName || u.email || "Player",
+        cash,
+        principal,
+        interestOwed,
+        interestPaid:Number(u.interestPaid||0),
+        net:cash-principal-interestOwed,
+        peak:Number(u.peakNetWorth ?? cash-principal-interestOwed),
+        low:Number(u.lowNetWorth ?? cash-principal-interestOwed),
+        wins:Number(u.wins||0),
+        losses:Number(u.losses||0),
+        roi:Number(u.roi||0),
+        big:u.bigBetRecord || "0-0",
+        tax:Number(u.taxEarned||0)
+      };
+    });
+    renderStandings();
+  },err=>{
+    console.error("Users listener failed",err);
+  });
+}
+
 onAuthStateChanged(auth, async (user)=>{
   if(user){
     loginBtn.textContent="Log Out";
     userPill.innerHTML=`<span class="status-dot"></span>Loading profile…`;
     try{
       await ensureAndWatchUserProfile(user);
+      startLeagueListeners();
     }catch(err){
       console.error(err);
       userPill.innerHTML=`<span class="status-dot" style="background:#ff6b6b"></span>Profile error`;
@@ -1333,6 +1558,10 @@ onAuthStateChanged(auth, async (user)=>{
       stopUserProfileListener();
       stopUserProfileListener = null;
     }
+    stopLeagueListeners();
+    openBets=[];
+    ledger=[];
+    players=[];
     currentUser = {
       uid:"",
       name:"Guest",
@@ -1362,6 +1591,7 @@ function renderAll(){
   renderOpenBets();
   renderStandings();
   renderLedger();
+  renderDashboardFeed();
 }
 
 renderGames();
