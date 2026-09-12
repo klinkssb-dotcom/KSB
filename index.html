@@ -1551,7 +1551,7 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
       renderSlip();
     }
 
-    alert("Wager saved to the league.");
+    alert("CONFIRMED: Your wager was placed successfully.");
   }catch(err){
     console.error(err);
     alert(err?.message||"Could not place wager.");
@@ -2165,6 +2165,10 @@ resetSeasonBtn?.addEventListener("click",()=>{
     return;
   }
 
+  if(!confirmAction_("Are you sure you want to begin a full season reset?\n\nYou will still have to type RESET and confirm one final time before anything is deleted.")){
+    return;
+  }
+
   document.getElementById("resetSeasonConfirmText").value="";
   resetSeasonModal.classList.add("open");
 });
@@ -2186,7 +2190,7 @@ confirmResetSeasonBtn?.addEventListener("click",async ()=>{
     return;
   }
 
-  if(!confirmAction_("FINAL CONFIRMATION\n\nAre you absolutely sure you want to reset the entire KSB season?\n\nThis permanently clears wagers, ledger history, recaps, snapshots, notifications, debt, records, and bankroll changes for every player.")){
+  if(!confirmAction_("ARE YOU SURE?\n\nThis will permanently reset the ENTIRE KSB season for every player.\n\nAll wagers, ledger history, recaps, snapshots, notifications, debt, records, and bankroll changes will be cleared.\n\nClick OK only if you are certain.")){
     return;
   }
 
@@ -2214,7 +2218,7 @@ confirmResetSeasonBtn?.addEventListener("click",async ()=>{
     }
 
     resetSeasonModal.classList.remove("open");
-    alert(`Season reset complete. ${result.usersReset||0} players reset.`);
+    alert(`CONFIRMED: Season reset completed successfully. ${result.usersReset||0} players were reset to the starting state.`);
 
   }catch(err){
     console.error(err);
