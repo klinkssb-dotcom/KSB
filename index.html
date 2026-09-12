@@ -1038,6 +1038,7 @@ function removeParlayLeg_(index){
 }
 
 function clearParlay_(){
+  if(parlayLegs.length && !confirmAction_("Clear every leg from this parlay?")) return;
   parlayLegs=[];
   renderSlip();
 }
@@ -1275,6 +1276,20 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
   const parlayOdds=isParlay ? calculateParlayOddsClient_() : null;
   if(isParlay && parlayOdds==null){alert("Could not calculate the parlay odds.");return;}
 
+  const confirmOdds=isParlay ? parlayOdds : selectedBet.odds;
+  const confirmSelection=isParlay
+    ? `${parlayLegs.length}-leg parlay`
+    : selectedBet.selection;
+  const confirmText =
+    `Are you sure you want to place this wager?\n\n` +
+    `${confirmSelection}\n` +
+    `Stake: ${money(stake)}\n` +
+    `Odds: ${confirmOdds>0?"+":""}${confirmOdds}` +
+    (betType==="big" ? `\nType: Big Bet` : ``) +
+    (power!=="none" ? `\nPower-Up: ${power==="small"?"Small Boost":"Big Boost"}` : ``);
+
+  if(!confirmAction_(confirmText)) return;
+
   const powerLabel=betType==="big"
     ? "BIG BET — TAX EXEMPT"
     : power==="small" ? "Small Boost"
@@ -1446,7 +1461,7 @@ function renderOpenBets(){
 
       const b=openBets.find(x=>x.id===btn.dataset.id);
       if(!b) return;
-      if(!confirm(`Use Tax Man on ${b.player}'s ${b.selection}? This locks immediately.`)) return;
+      if(!confirmAction_(`Are you sure you want to use Tax Man on ${b.player}'s ${b.selection}?\n\nThis uses your Tax Man for the week and locks to this wager immediately.`)) return;
 
       const userRef=doc(db,"users",auth.currentUser.uid);
       const betRef=doc(db,"bets",b.id);
@@ -1612,7 +1627,7 @@ function renderAccountMetrics(){
 document.getElementById("borrowBtn").addEventListener("click",async ()=>{
   if(!auth.currentUser){alert("Log in before using league banking.");return;}
   if(currentUser.loanUsed){alert("You already took your one loan for this NFL week.");return;}
-  if(!confirm("Borrow $1,000? You can only take one loan this NFL week.")) return;
+  if(!confirmAction_("Are you sure you want to borrow $1,000?\n\nThis uses your one loan for the current NFL week and the balance will accrue weekly interest after its grace period.")) return;
 
   const userRef=doc(db,"users",auth.currentUser.uid);
   const txRef=doc(collection(db,"transactions"));
@@ -1668,6 +1683,8 @@ document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
   if(!auth.currentUser){alert("Log in first.");return;}
   const requested=Number(document.getElementById("repayAmount").value||0);
   if(requested<=0){alert("Enter a valid repayment amount.");return;}
+
+  if(!confirmAction_(`Are you sure you want to repay ${money(requested)}?\n\nRepayments apply to interest owed first, then principal.`)) return;
 
   const userRef=doc(db,"users",auth.currentUser.uid);
   const txRef=doc(collection(db,"transactions"));
@@ -2040,7 +2057,7 @@ confirmResetSeasonBtn?.addEventListener("click",async ()=>{
     return;
   }
 
-  if(!confirm("Final confirmation: permanently reset the entire KSB season?")){
+  if(!confirmAction_("FINAL CONFIRMATION\n\nAre you absolutely sure you want to reset the entire KSB season?\n\nThis permanently clears wagers, ledger history, recaps, snapshots, notifications, debt, records, and bankroll changes for every player.")){
     return;
   }
 
