@@ -254,6 +254,7 @@
     <nav class="nav" id="mainNav">
       <button class="active" data-target="dashboard">Dashboard</button>
       <button data-target="sportsbook">Sportsbook</button>
+      <button data-target="mybets">My Bets</button>
       <button data-target="standings">Standings</button>
       <button data-target="ledger">League Ledger</button>
       <button data-target="recap">Weekly Recap</button>
@@ -474,6 +475,68 @@
               </tr>
             </thead>
             <tbody id="openBetsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="mybets" class="section">
+      <div class="hero">
+        <div class="eyebrow">Your Weekly Action</div>
+        <h1>My Bets</h1>
+        <p>
+          Every wager you placed during the current NFL week, including open and settled bets.
+          The weekly window resets Tuesday morning.
+        </p>
+      </div>
+
+      <div class="grid cols-4">
+        <div class="card">
+          <div class="eyebrow">Bets This Week</div>
+          <div class="metric blue"><span id="myBetsCountMetric">0</span>/10</div>
+          <div class="muted">Parlays count as one wager</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">Amount Wagered</div>
+          <div class="metric" id="myBetsStakeMetric">$0.00</div>
+          <div class="muted">Total stakes this NFL week</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">Weekly Record</div>
+          <div class="metric gold" id="myBetsRecordMetric">0-0-0</div>
+          <div class="muted">Wins - Losses - Pushes</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">Settled P/L</div>
+          <div class="metric" id="myBetsProfitMetric">$0.00</div>
+          <div class="muted">Profit/loss from settled wagers</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <div>
+            <h2 style="margin-bottom:4px">This Week's Bets</h2>
+            <div class="muted" id="myBetsWeekLabel">Current Tuesday-to-Tuesday NFL week</div>
+          </div>
+          <span class="chip blue" id="myBetsOpenMetric">0 Open</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Placed</th>
+                <th>Bet</th>
+                <th>Stake</th>
+                <th>Odds</th>
+                <th>Power-Up</th>
+                <th>Status</th>
+                <th>Payout</th>
+                <th>P/L</th>
+              </tr>
+            </thead>
+            <tbody id="myBetsBody"></tbody>
           </table>
         </div>
       </div>
@@ -717,6 +780,11 @@
       </div>
 
       <div class="grid cols-2">
+        <div class="card">
+          <h3>Where can I see my bets for the week?</h3>
+          <p>Open the <strong>My Bets</strong> tab. It shows every wager you placed during the current Tuesday-to-Tuesday NFL week, including open bets, settled results, total amount wagered, weekly record, payouts, and settled profit/loss.</p>
+        </div>
+
         <div class="card">
           <h3>How do I place a normal bet?</h3>
           <p>Open Sportsbook, click the line you want, enter your stake, choose Normal Bet, optionally select a power-up, then click <strong>Place Wager</strong>. A confirmation pop-up shows the stake and odds before submission.</p>
@@ -1787,6 +1855,124 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
   }
 });
 
+function formatBetPlacedTime_(ms){
+  const d=new Date(Number(ms||0));
+  if(Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString([],{
+    weekday:"short",
+    hour:"numeric",
+    minute:"2-digit"
+  });
+}
+
+function betStatusChipClass_(status){
+  const s=String(status||"OPEN").toUpperCase();
+  if(s==="WIN") return "green";
+  if(s==="LOSS") return "red";
+  if(s==="PUSH") return "gold";
+  return "blue";
+}
+
+function renderMyBets(){
+  const body=document.getElementById("myBetsBody");
+  if(!body) return;
+
+  const countMetric=document.getElementById("myBetsCountMetric");
+  const stakeMetric=document.getElementById("myBetsStakeMetric");
+  const recordMetric=document.getElementById("myBetsRecordMetric");
+  const profitMetric=document.getElementById("myBetsProfitMetric");
+  const openMetric=document.getElementById("myBetsOpenMetric");
+  const weekLabel=document.getElementById("myBetsWeekLabel");
+
+  const {start,end}=currentNflWeekWindow_();
+
+  if(weekLabel){
+    const fmt={month:"short",day:"numeric"};
+    weekLabel.textContent=
+      `${start.toLocaleDateString([],fmt)} – ${new Date(end.getTime()-1).toLocaleDateString([],fmt)}`;
+  }
+
+  if(!auth.currentUser){
+    if(countMetric) countMetric.textContent="0";
+    if(stakeMetric) stakeMetric.textContent="$0.00";
+    if(recordMetric) recordMetric.textContent="0-0-0";
+    if(profitMetric){
+      profitMetric.textContent="$0.00";
+      profitMetric.classList.remove("green","red");
+    }
+    if(openMetric) openMetric.textContent="0 Open";
+    body.innerHTML=`<tr><td colspan="8"><div class="empty">Log in to view your bets for the week.</div></td></tr>`;
+    return;
+  }
+
+  const uid=auth.currentUser.uid;
+
+  const rows=openBets
+    .filter(b=>{
+      const created=Number(b.createdAtMs||0);
+      return b.userId===uid &&
+             created>=start.getTime() &&
+             created<end.getTime();
+    })
+    .sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
+
+  const totalStake=rows.reduce((sum,b)=>sum+Number(b.stake||0),0);
+  const wins=rows.filter(b=>String(b.status||"").toUpperCase()==="WIN").length;
+  const losses=rows.filter(b=>String(b.status||"").toUpperCase()==="LOSS").length;
+  const pushes=rows.filter(b=>String(b.status||"").toUpperCase()==="PUSH").length;
+  const openCount=rows.filter(b=>String(b.status||"OPEN").toUpperCase()==="OPEN").length;
+
+  const settledProfit=rows.reduce((sum,b)=>{
+    const status=String(b.status||"OPEN").toUpperCase();
+    if(!["WIN","LOSS","PUSH"].includes(status)) return sum;
+    return sum + Number(b.payout||0) - Number(b.stake||0);
+  },0);
+
+  if(countMetric) countMetric.textContent=String(rows.length);
+  if(stakeMetric) stakeMetric.textContent=money(totalStake);
+  if(recordMetric) recordMetric.textContent=`${wins}-${losses}-${pushes}`;
+  if(openMetric) openMetric.textContent=`${openCount} Open`;
+
+  if(profitMetric){
+    profitMetric.textContent=`${settledProfit>0?"+":""}${money(settledProfit)}`;
+    profitMetric.classList.remove("green","red");
+    if(settledProfit>0) profitMetric.classList.add("green");
+    if(settledProfit<0) profitMetric.classList.add("red");
+  }
+
+  body.innerHTML=rows.length ? rows.map(b=>{
+    const status=String(b.status||"OPEN").toUpperCase();
+    const isSettled=["WIN","LOSS","PUSH"].includes(status);
+    const payout=isSettled ? Number(b.payout||0) : null;
+    const pl=isSettled ? payout-Number(b.stake||0) : null;
+
+    const betText=b.betKind==="parlay"
+      ? `<strong>${b.selection||`${(b.legs||[]).length}-leg parlay`}</strong>
+         <div class="muted">${(b.legs||[]).map(x=>x.selection).join(" + ")}</div>`
+      : `<strong>${b.selection||b.bet||"Wager"}</strong>
+         <div class="muted">${b.game||""}</div>`;
+
+    return `
+      <tr>
+        <td>${formatBetPlacedTime_(b.createdAtMs)}</td>
+        <td>${betText}</td>
+        <td>${money(b.stake)}</td>
+        <td>${Number(b.odds)>0?"+":""}${b.odds}</td>
+        <td>
+          <span class="chip ${(b.powerLabel||"").includes("BIG BET")?"gold":(b.powerLabel||"").includes("Boost")?"blue":""}">
+            ${b.powerLabel||"None"}
+          </span>
+        </td>
+        <td><span class="chip ${betStatusChipClass_(status)}">${status}</span></td>
+        <td>${isSettled?money(payout):"—"}</td>
+        <td class="${pl>0?"green":pl<0?"red":""}">
+          ${isSettled ? `${pl>0?"+":""}${money(pl)}` : "—"}
+        </td>
+      </tr>
+    `;
+  }).join("") : `<tr><td colspan="8"><div class="empty">You have not placed any wagers this NFL week.</div></td></tr>`;
+}
+
 function renderOpenBets(){
   const body=document.getElementById("openBetsBody");
   const rows=openBets.filter(b=>String(b.status||"OPEN").toUpperCase()==="OPEN");
@@ -2466,6 +2652,7 @@ function startLeagueListeners(){
     openBets=snap.docs.map(d=>({id:d.id,...d.data()}))
       .sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
     renderOpenBets();
+    renderMyBets();
   },err=>{
     console.error("Bets listener failed",err);
   });
@@ -2809,6 +2996,7 @@ function renderWeeklyRecap(){
 function renderAll(){
   renderAccountMetrics();
   renderOpenBets();
+  renderMyBets();
   renderStandings();
   renderLedger();
   renderDashboardFeed();
