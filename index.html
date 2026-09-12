@@ -1458,10 +1458,12 @@ document.getElementById("borrowBtn").addEventListener("click",async ()=>{
       const cash=Number(u.cash||0)+RULES.LOAN_AMOUNT;
       const principal=Number(u.principalOwed||0)+RULES.LOAN_AMOUNT;
       const interest=Number(u.interestOwed||0);
+      const gracePrincipal=Number(u.gracePrincipal||0)+RULES.LOAN_AMOUNT;
 
       tx.update(userRef,{
         cash,
         principalOwed:principal,
+        gracePrincipal,
         loanUsed:true
       });
 
@@ -1505,6 +1507,7 @@ document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
       const cash=Number(u.cash||0);
       let interest=Number(u.interestOwed||0);
       let principal=Number(u.principalOwed||0);
+      let gracePrincipal=Math.max(0,Math.min(principal,Number(u.gracePrincipal||0)));
       const total=interest+principal;
 
       if(total<=0) throw new Error("You do not owe anything.");
@@ -1513,14 +1516,25 @@ document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
       const amount=Math.min(requested,total);
       const paidInterest=Math.min(interest,amount);
       interest-=paidInterest;
+
       const principalPayment=amount-paidInterest;
+
+      // Repay older interest-bearing principal first so a player cannot
+      // use repayment ordering to shelter old debt inside the grace bucket.
+      const eligiblePrincipal=Math.max(0,principal-gracePrincipal);
+      const eligiblePaid=Math.min(eligiblePrincipal,principalPayment);
+      const gracePaid=Math.max(0,principalPayment-eligiblePaid);
+
       principal=Math.max(0,principal-principalPayment);
+      gracePrincipal=Math.max(0,gracePrincipal-gracePaid);
+
       const cashAfter=cash-amount;
       const interestPaid=Number(u.interestPaid||0)+paidInterest;
 
       tx.update(userRef,{
         cash:cashAfter,
         principalOwed:principal,
+        gracePrincipal,
         interestOwed:interest,
         interestPaid
       });
