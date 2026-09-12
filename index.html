@@ -354,6 +354,12 @@
           </div>
         </div>
       </div>
+      <div class="card" id="commissionerPanel" style="display:none;margin-top:16px;border-color:#8a6d16">
+        <div class="eyebrow">Commissioner Controls</div>
+        <h2>Season Management</h2>
+        <p class="muted">Reset every league member to a fresh $2,000 bankroll and clear wagers, ledger history, recaps, snapshots, and notifications.</p>
+        <button class="btn danger" id="resetSeasonBtn">Reset Entire Season</button>
+      </div>
     </section>
 
     <section id="sportsbook" class="section">
@@ -1592,6 +1598,11 @@ function renderAccountMetrics(){
   document.getElementById("loanStatusMetric").textContent=currentUser.loanUsed?"Used":"Available";
   document.getElementById("borrowBtn").disabled=currentUser.loanUsed || !auth.currentUser;
 
+  const commissionerPanel=document.getElementById("commissionerPanel");
+  if(commissionerPanel){
+    commissionerPanel.style.display=currentUser.role==="commissioner"?"block":"none";
+  }
+
   const powerCards=[...document.querySelectorAll(".power")];
   if(powerCards[0]) powerCards[0].querySelector(".chip").textContent=currentUser.smallBoostUsed?"Used":"Available";
   if(powerCards[1]) powerCards[1].querySelector(".chip").textContent=currentUser.bigBoostUsed?"Used":"Available";
@@ -1995,6 +2006,79 @@ onAuthStateChanged(auth, async (user)=>{
     renderAll();
   }
 });
+
+
+const resetSeasonModal=document.getElementById("resetSeasonModal");
+const resetSeasonBtn=document.getElementById("resetSeasonBtn");
+const closeResetSeasonModal=document.getElementById("closeResetSeasonModal");
+const confirmResetSeasonBtn=document.getElementById("confirmResetSeasonBtn");
+
+resetSeasonBtn?.addEventListener("click",()=>{
+  if(currentUser.role!=="commissioner"){
+    alert("Commissioner access required.");
+    return;
+  }
+
+  document.getElementById("resetSeasonConfirmText").value="";
+  resetSeasonModal.classList.add("open");
+});
+
+closeResetSeasonModal?.addEventListener("click",()=>{
+  resetSeasonModal.classList.remove("open");
+});
+
+confirmResetSeasonBtn?.addEventListener("click",async ()=>{
+  if(currentUser.role!=="commissioner" || !auth.currentUser){
+    alert("Commissioner access required.");
+    return;
+  }
+
+  const typed=document.getElementById("resetSeasonConfirmText").value.trim().toUpperCase();
+
+  if(typed!=="RESET"){
+    alert('Type RESET exactly to confirm.');
+    return;
+  }
+
+  if(!confirm("Final confirmation: permanently reset the entire KSB season?")){
+    return;
+  }
+
+  confirmResetSeasonBtn.disabled=true;
+  confirmResetSeasonBtn.textContent="Resetting…";
+
+  try{
+    const idToken=await auth.currentUser.getIdToken(true);
+
+    const response=await fetch(KSB_BACKEND_URL,{
+      method:"POST",
+      headers:{
+        "Content-Type":"text/plain;charset=utf-8"
+      },
+      body:JSON.stringify({
+        action:"resetSeason",
+        idToken
+      })
+    });
+
+    const result=await response.json();
+
+    if(!result.ok){
+      throw new Error(result.error||"Season reset failed.");
+    }
+
+    resetSeasonModal.classList.remove("open");
+    alert(`Season reset complete. ${result.usersReset||0} players reset.`);
+
+  }catch(err){
+    console.error(err);
+    alert(err?.message||"Season reset failed.");
+  }finally{
+    confirmResetSeasonBtn.disabled=false;
+    confirmResetSeasonBtn.textContent="Reset Entire Season";
+  }
+});
+
 
 function renderWeeklyRecap(){
   const label=document.getElementById("recapWeekLabel");
