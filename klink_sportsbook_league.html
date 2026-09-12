@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Klink Sportsbook League</title>
+  <meta name="theme-color" content="#0b1220" />
+  <style>
+    :root{
+      --bg:#07111f;
+      --panel:#0f1c2e;
+      --panel2:#13243a;
+      --line:#243955;
+      --text:#eef5ff;
+      --muted:#9fb1c8;
+      --green:#45d483;
+      --red:#ff6b6b;
+      --gold:#f2c94c;
+      --blue:#5aa9ff;
+      --purple:#a984ff;
+      --shadow:0 18px 45px rgba(0,0,0,.28);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(90,169,255,.10), transparent 28%),
+        radial-gradient(circle at 90% 10%, rgba(69,212,131,.08), transparent 24%),
+        var(--bg);
+      color:var(--text);
+      min-height:100vh;
+    }
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    .app{max-width:1500px;margin:0 auto;padding:18px}
+    .topbar{
+      position:sticky;top:0;z-index:50;
+      backdrop-filter:blur(14px);
+      background:rgba(7,17,31,.88);
+      border:1px solid rgba(255,255,255,.05);
+      border-radius:20px;
+      box-shadow:var(--shadow);
+      padding:14px;
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      gap:16px;
+      align-items:center;
+      margin-bottom:18px;
+    }
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand-badge{
+      width:46px;height:46px;border-radius:14px;
+      display:grid;place-items:center;
+      background:linear-gradient(135deg,#1e8fff,#45d483);
+      color:#03111d;font-weight:900;font-size:22px;
+      box-shadow:0 10px 24px rgba(69,212,131,.18);
+    }
+    .brand-title{font-size:18px;font-weight:900}
+    .brand-sub{font-size:12px;color:var(--muted)}
+    .nav{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+    .nav button{
+      border:1px solid var(--line);
+      color:var(--muted);
+      background:#0b1728;
+      border-radius:999px;
+      padding:9px 13px;
+      font-weight:800;
+    }
+    .nav button.active{
+      background:linear-gradient(135deg,rgba(90,169,255,.22),rgba(69,212,131,.16));
+      color:white;border-color:#3e638e;
+    }
+    .userbox{display:flex;align-items:center;gap:10px}
+    .pill{
+      padding:8px 12px;border-radius:999px;
+      background:#0b1728;border:1px solid var(--line);
+      color:var(--muted);font-size:13px;font-weight:800
+    }
+    .btn{
+      border:none;border-radius:12px;padding:10px 14px;font-weight:900;
+      background:linear-gradient(135deg,#368ef7,#45d483);color:#07111f;
+    }
+    .btn.secondary{background:#14253b;color:#dce9f8;border:1px solid var(--line)}
+    .btn.danger{background:#3a1c24;color:#ffb4b4;border:1px solid #6d2e3b}
+    .btn.gold{background:linear-gradient(135deg,#f2c94c,#f29f4c);color:#2b1a00}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .grid{display:grid;gap:16px}
+    .grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .card{
+      background:linear-gradient(180deg,rgba(20,36,58,.96),rgba(12,25,43,.96));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:18px;
+    }
+    .card h2,.card h3{margin:0 0 8px}
+    .eyebrow{color:var(--muted);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+    .metric{font-size:30px;font-weight:950;margin-top:5px}
+    .metric.small{font-size:22px}
+    .green{color:var(--green)} .red{color:var(--red)} .gold{color:var(--gold)} .blue{color:var(--blue)}
+    .muted{color:var(--muted)}
+    .section{display:none}
+    .section.active{display:block}
+    .hero{
+      padding:24px;border-radius:22px;margin-bottom:16px;
+      background:
+        linear-gradient(120deg,rgba(46,120,208,.24),rgba(31,138,91,.18)),
+        #0c1b2d;
+      border:1px solid #35577b;
+      box-shadow:var(--shadow);
+    }
+    .hero h1{margin:0;font-size:34px}
+    .hero p{color:var(--muted);max-width:900px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+    th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+    tr:hover td{background:rgba(255,255,255,.02)}
+    .table-wrap{overflow:auto}
+    .rank{font-weight:950;color:var(--gold)}
+    .chip{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:5px 9px;border-radius:999px;
+      border:1px solid var(--line);font-size:12px;font-weight:900;
+      background:#0a1728;color:#dce9f8
+    }
+    .chip.green{background:#0f2f23;border-color:#226f4b}
+    .chip.red{background:#31171d;border-color:#70313f}
+    .chip.gold{background:#302811;border-color:#716024}
+    .chip.blue{background:#10263e;border-color:#2f5e8f}
+    .notice{
+      border-left:4px solid var(--blue);background:#0b192a;border-radius:12px;
+      padding:12px 14px;color:#d8e7f7;margin-bottom:14px
+    }
+    .powerups{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .power{
+      border:1px solid var(--line);border-radius:16px;padding:15px;background:#0b1728
+    }
+    .power strong{display:block;margin-bottom:6px}
+    .power .big{font-size:25px;font-weight:950}
+    .market-grid{
+      display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px
+    }
+    .game{
+      border:1px solid var(--line);border-radius:16px;padding:14px;background:#0b1728
+    }
+    .game-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .teamline{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:8px 0}
+    .odds-btn{
+      border:1px solid #345679;background:#102339;color:#eef5ff;
+      border-radius:10px;padding:7px 10px;font-weight:900
+    }
+    .odds-btn:hover{border-color:#5aa9ff}
+    .bet-slip{
+      position:sticky;top:105px;
+    }
+    .bet-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    label{display:block;font-size:12px;color:var(--muted);font-weight:800;margin-bottom:6px}
+    input,select{
+      width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+      background:#081523;color:white;outline:none
+    }
+    input:focus,select:focus{border-color:#5aa9ff}
+    .feed{display:flex;flex-direction:column;gap:10px}
+    .feed-item{
+      display:grid;grid-template-columns:44px 1fr auto;gap:12px;
+      padding:12px;border:1px solid var(--line);border-radius:14px;background:#0b1728
+    }
+    .avatar{
+      width:44px;height:44px;border-radius:13px;display:grid;place-items:center;
+      font-weight:950;background:#1b3350
+    }
+    .feed-time{font-size:11px;color:var(--muted)}
+    .rules h3{margin-top:22px}
+    .rules li{margin:8px 0;color:#d7e4f2}
+    .notification{
+      padding:12px 14px;border:1px solid var(--line);background:#0b1728;border-radius:14px;margin-bottom:10px
+    }
+    .notification.unread{border-color:#4d77a8;background:#10223a}
+    .modal{
+      position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;place-items:center;z-index:100
+    }
+    .modal.open{display:grid}
+    .modal-panel{
+      width:min(460px,92vw);background:#0d1a2b;border:1px solid var(--line);
+      border-radius:20px;padding:20px;box-shadow:var(--shadow)
+    }
+    .modal-panel h2{margin-top:0}
+    .tabs-mini{display:flex;gap:8px;margin-bottom:14px}
+    .tabs-mini button{flex:1}
+    .footer{color:var(--muted);text-align:center;padding:30px 10px;font-size:12px}
+    .status-dot{width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px}
+    .bar{height:8px;background:#081523;border-radius:999px;overflow:hidden;margin-top:8px}
+    .bar > div{height:100%;background:linear-gradient(90deg,#5aa9ff,#45d483)}
+    .empty{padding:18px;color:var(--muted);text-align:center;border:1px dashed var(--line);border-radius:14px}
+    @media (max-width:1050px){
+      .grid.cols-4{grid-template-columns:repeat(2,1fr)}
+      .grid.cols-3{grid-template-columns:1fr}
+      .bet-layout{grid-template-columns:1fr}
+      .bet-slip{position:static}
+      .market-grid{grid-template-columns:1fr}
+      .topbar{grid-template-columns:1fr}
+      .nav{justify-content:flex-start;overflow:auto;flex-wrap:nowrap}
+      .userbox{justify-content:space-between}
+    }
+    @media (max-width:650px){
+      .app{padding:10px}
+      .grid.cols-4,.grid.cols-2,.powerups,.form-row{grid-template-columns:1fr}
+      .hero h1{font-size:28px}
+      .metric{font-size:26px}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-badge">$</div>
+      <div>
+        <div class="brand-title">Klink Sportsbook League</div>
+        <div class="brand-sub">Fake money. Real lines. Bad decisions.</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="mainNav">
+      <button class="active" data-target="dashboard">Dashboard</button>
+      <button data-target="sportsbook">Sportsbook</button>
+      <button data-target="standings">Standings</button>
+      <button data-target="ledger">League Ledger</button>
+      <button data-target="recap">Weekly Recap</button>
+      <button data-target="notifications">Notifications</button>
+      <button data-target="rules">League Rules</button>
+    </nav>
+
+    <div class="userbox">
+      <div class="pill" id="userPill"><span class="status-dot"></span>Guest Mode</div>
+      <button class="btn" id="loginBtn">Log In</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="dashboard" class="section active">
+      <div class="hero">
+        <div class="eyebrow">NFL Sportsbook League</div>
+        <h1>Welcome to the league.</h1>
+        <p>
+          Everyone starts with $2,000. Bet real NFL lines, manage debt, use weekly power-ups,
+          and finish the Super Bowl with the highest net worth.
+        </p>
+      </div>
+
+      <div class="grid cols-4">
+        <div class="card">
+          <div class="eyebrow">Cash</div>
+          <div class="metric green" id="cashMetric">$2,000.00</div>
+          <div class="muted">Available to wager</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">Total Debt</div>
+          <div class="metric red" id="debtMetric">$0.00</div>
+          <div class="muted">Principal + unpaid interest</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">Net Worth</div>
+          <div class="metric gold" id="netMetric">$2,000.00</div>
+          <div class="muted">Cash minus total debt</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">Bets This Week</div>
+          <div class="metric blue"><span id="betCountMetric">0</span>/10</div>
+          <div class="muted">Maximum 10 wagers per NFL week</div>
+        </div>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:16px">
+        <div class="card">
+          <h2>Weekly Loadout</h2>
+          <p class="muted">Resets Tuesday morning.</p>
+          <div class="powerups">
+            <div class="power">
+              <strong>⚡ Small Boost</strong>
+              <div class="big">+50%</div>
+              <span class="muted">Profit on one eligible wager</span>
+              <div style="margin-top:10px"><span class="chip green">Available</span></div>
+            </div>
+            <div class="power">
+              <strong>🔥 Big Boost</strong>
+              <div class="big">+100%</div>
+              <span class="muted">Profit on one eligible wager</span>
+              <div style="margin-top:10px"><span class="chip gold">Available</span></div>
+            </div>
+            <div class="power">
+              <strong>💸 Tax Man</strong>
+              <div class="big">20%</div>
+              <span class="muted">Take 20% of another member's eligible winning profit</span>
+              <div style="margin-top:10px"><span class="chip blue">Available</span></div>
+            </div>
+          </div>
+          <div class="notice" style="margin-top:14px">
+            <strong>Big Bet:</strong> One $101–$200 wager each NFL week. It is tax-exempt and cannot be boosted.
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Debt & Interest</h2>
+          <div class="grid cols-2">
+            <div>
+              <div class="eyebrow">Principal Owed</div>
+              <div class="metric small" id="principalMetric">$0.00</div>
+            </div>
+            <div>
+              <div class="eyebrow">Interest Owed</div>
+              <div class="metric small" id="interestOwedMetric">$0.00</div>
+            </div>
+            <div>
+              <div class="eyebrow">Interest Paid</div>
+              <div class="metric small" id="interestPaidMetric">$0.00</div>
+            </div>
+            <div>
+              <div class="eyebrow">Loan This Week</div>
+              <div class="metric small" id="loanStatusMetric">Available</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+            <button class="btn gold" id="borrowBtn">Borrow $1,000</button>
+            <button class="btn secondary" id="repayBtn">Repay Debt</button>
+          </div>
+          <p class="muted" style="margin-bottom:0">
+            10% interest is charged Tuesday morning. Available cash auto-pays interest first.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:16px">
+        <div class="card">
+          <h2>League Activity</h2>
+          <div class="feed" id="dashboardFeed"></div>
+        </div>
+        <div class="card">
+          <h2>Your Season Snapshot</h2>
+          <div class="grid cols-2">
+            <div><div class="eyebrow">Record</div><div class="metric small">0-0</div></div>
+            <div><div class="eyebrow">ROI</div><div class="metric small">0.0%</div></div>
+            <div><div class="eyebrow">Peak Net Worth</div><div class="metric small">$2,000</div></div>
+            <div><div class="eyebrow">Lowest Net Worth</div><div class="metric small">$2,000</div></div>
+          </div>
+          <div style="margin-top:14px">
+            <div class="eyebrow">Season Progress</div>
+            <div class="bar"><div style="width:8%"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sportsbook" class="section">
+      <div class="hero">
+        <div class="eyebrow">Sportsbook</div>
+        <h1>Place Your Bets</h1>
+        <p>
+          Regular season normal wagers are $10–$100. One weekly Big Bet may be $101–$200.
+          Postseason limits double. Super Bowl wagers have no limits and no power-ups.
+        </p>
+      </div>
+
+      <div class="bet-layout">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <div>
+              <h2>Upcoming NFL Games</h2>
+              <div class="muted">Demo lines shown below. Backend can replace these with live odds.</div>
+            </div>
+            <span class="chip green">Odds locked at placement</span>
+          </div>
+          <div class="market-grid" id="gamesGrid"></div>
+        </div>
+
+        <aside class="card bet-slip">
+          <h2>Bet Slip</h2>
+          <div id="betSlipEmpty" class="empty">Select a line to start a wager.</div>
+          <div id="betSlipForm" style="display:none">
+            <div class="eyebrow" id="slipGame">Game</div>
+            <h3 id="slipSelection">Selection</h3>
+            <div class="chip blue" id="slipOdds">-110</div>
+
+            <div style="margin-top:16px">
+              <label for="stakeInput">Stake</label>
+              <input id="stakeInput" type="number" min="10" max="200" step="1" value="25" />
+            </div>
+
+            <div class="form-row" style="margin-top:10px">
+              <div>
+                <label for="betTypeSelect">Wager Type</label>
+                <select id="betTypeSelect">
+                  <option value="normal">Normal Bet</option>
+                  <option value="big">Big Bet</option>
+                </select>
+              </div>
+              <div>
+                <label for="powerSelect">Power-Up</label>
+                <select id="powerSelect">
+                  <option value="none">None</option>
+                  <option value="small">Small Boost +50%</option>
+                  <option value="big">Big Boost +100%</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="notice" id="slipNotice" style="margin-top:12px">
+              Big Bets are tax-exempt and cannot be boosted.
+            </div>
+
+            <div style="margin-top:12px">
+              <div style="display:flex;justify-content:space-between"><span class="muted">Potential profit</span><strong id="profitPreview">$22.73</strong></div>
+              <div style="display:flex;justify-content:space-between;margin-top:6px"><span class="muted">Potential payout</span><strong id="payoutPreview">$47.73</strong></div>
+            </div>
+
+            <button class="btn" id="placeBetBtn" style="width:100%;margin-top:16px">Place Wager</button>
+          </div>
+        </aside>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Open League Wagers</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Player</th><th>Bet</th><th>Stake</th><th>Odds</th><th>Power-Up</th><th>Status</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="openBetsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="standings" class="section">
+      <div class="hero">
+        <div class="eyebrow">Standings</div>
+        <h1>League Standings</h1>
+        <p>Ranked by net worth. No tiebreakers — ties remain ties.</p>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th><th>Player</th><th>Net Worth</th><th>Cash</th><th>Principal</th>
+                <th>Interest Owed</th><th>Interest Paid</th><th>Record</th><th>ROI</th>
+                <th>Peak NW</th><th>Low NW</th><th>Big Bet</th><th>Tax Earned</th>
+              </tr>
+            </thead>
+            <tbody id="standingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid cols-3" style="margin-top:16px">
+        <div class="card"><div class="eyebrow">League High</div><div class="metric gold">$2,540</div><div class="muted">Peak net worth — Jared</div></div>
+        <div class="card"><div class="eyebrow">League Low</div><div class="metric red">-$1,120</div><div class="muted">Lowest net worth — Mike</div></div>
+        <div class="card"><div class="eyebrow">Most Tax Collected</div><div class="metric blue">$188</div><div class="muted">Sara</div></div>
+      </div>
+    </section>
+
+    <section id="ledger" class="section">
+      <div class="hero">
+        <div class="eyebrow">Public Ledger</div>
+        <h1>League Transaction History</h1>
+        <p>Append-only transaction history. Bets, settlements, loans, repayments, interest, Tax Man transfers, boosts, and commissioner adjustments are visible to everyone.</p>
+      </div>
+
+      <div class="card">
+        <div class="grid cols-4" style="margin-bottom:14px">
+          <div>
+            <label>Player</label>
+            <select id="ledgerPlayerFilter"><option value="">All Players</option></select>
+          </div>
+          <div>
+            <label>Type</label>
+            <select id="ledgerTypeFilter">
+              <option value="">All Types</option>
+              <option>BET</option><option>SETTLEMENT</option><option>LOAN</option><option>REPAYMENT</option>
+              <option>INTEREST</option><option>TAX MAN</option><option>BOOST</option><option>ADJUSTMENT</option>
+            </select>
+          </div>
+          <div>
+            <label>NFL Week</label>
+            <select><option>All Weeks</option><option>Week 1</option><option>Week 2</option></select>
+          </div>
+          <div style="display:flex;align-items:end">
+            <button class="btn secondary" id="clearFiltersBtn" style="width:100%">Clear Filters</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th><th>Player</th><th>Type</th><th>Amount</th><th>Cash After</th>
+                <th>Principal</th><th>Interest Owed</th><th>Net Worth</th><th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="recap" class="section">
+      <div class="hero">
+        <div class="eyebrow">Week 1 Recap</div>
+        <h1>Weekly Recap</h1>
+        <p>Generated automatically at the Tuesday morning rollover.</p>
+      </div>
+
+      <div class="grid cols-4">
+        <div class="card"><div class="eyebrow">Bettor of the Week</div><div class="metric small gold">Jared</div><div class="muted">+$310 weekly P/L</div></div>
+        <div class="card"><div class="eyebrow">Biggest Hit</div><div class="metric small green">+$260</div><div class="muted">Bills +130, Big Boost</div></div>
+        <div class="card"><div class="eyebrow">Tax Collector</div><div class="metric small blue">Sara</div><div class="muted">$52 collected</div></div>
+        <div class="card"><div class="eyebrow">Most Interest Paid</div><div class="metric small red">$100</div><div class="muted">Mike</div></div>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:16px">
+        <div class="card">
+          <h2>Weekly P/L</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Player</th><th>P/L</th><th>Rank Change</th><th>Bets</th><th>Record</th></tr></thead>
+              <tbody>
+                <tr><td>Jared</td><td class="green">+$310</td><td class="green">▲ 2</td><td>8</td><td>5-3</td></tr>
+                <tr><td>Sara</td><td class="green">+$155</td><td class="green">▲ 1</td><td>9</td><td>6-3</td></tr>
+                <tr><td>Chris</td><td class="green">+$82</td><td>—</td><td>7</td><td>4-3</td></tr>
+                <tr><td>Mike</td><td class="red">-$240</td><td class="red">▼ 3</td><td>10</td><td>3-7</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Awards</h2>
+          <div class="feed">
+            <div class="notification"><strong>🔥 Biggest Big Bet Hit</strong><div class="muted">Chris — $200 at +145</div></div>
+            <div class="notification"><strong>💸 Tax Man of the Week</strong><div class="muted">Sara collected $52</div></div>
+            <div class="notification"><strong>📉 Coldest Bettor</strong><div class="muted">Mike finished 3-7</div></div>
+            <div class="notification"><strong>🎲 Degenerate of the Week</strong><div class="muted">Mike used all 10 bets and borrowed $1,000</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="notifications" class="section">
+      <div class="hero">
+        <div class="eyebrow">Notifications</div>
+        <h1>League Alerts</h1>
+        <p>In-site notifications for wagers, Tax Man, settlements, interest, and weekly limits.</p>
+      </div>
+      <div class="card" id="notificationList"></div>
+    </section>
+
+    <section id="rules" class="section rules">
+      <div class="hero">
+        <div class="eyebrow">Official Rules</div>
+        <h1>League Rules</h1>
+        <p>This page is intended to be the single source of truth for the league.</p>
+      </div>
+
+      <div class="card">
+        <h3>1. Starting Bankroll & Champion</h3>
+        <ul>
+          <li>Every player starts with <strong>$2,000</strong> in fake money.</li>
+          <li>The season runs through the <strong>Super Bowl</strong>.</li>
+          <li>Final standings are based on <strong>Net Worth = Cash − Principal Owed − Interest Owed</strong>.</li>
+          <li>There are <strong>no tiebreakers</strong>. Equal net worth means a shared place/title.</li>
+        </ul>
+
+        <h3>2. Weekly Betting Limits</h3>
+        <ul>
+          <li>Maximum <strong>10 wagers per NFL week</strong>.</li>
+          <li>Regular-season normal wagers: <strong>$10–$100</strong>.</li>
+          <li>One weekly <strong>Big Bet</strong>: <strong>$101–$200</strong>.</li>
+          <li>Big Bet is <strong>tax-exempt</strong> and cannot use Small Boost or Big Boost.</li>
+          <li>During the NFL postseason, normal wager and Big Bet limits <strong>double</strong>.</li>
+          <li>Parlays are allowed with <strong>no additional leg limit</strong>.</li>
+          <li>Multiple wagers on the same game are allowed.</li>
+        </ul>
+
+        <h3>3. Weekly Power-Ups</h3>
+        <ul>
+          <li><strong>Small Boost:</strong> +50% to the profit of one eligible wager.</li>
+          <li><strong>Big Boost:</strong> +100% to the profit of one eligible wager.</li>
+          <li><strong>Tax Man:</strong> target another player's eligible open wager before kickoff. If it wins, collect 20% of that wager's profit.</li>
+          <li>Tax Man cannot target a Big Bet.</li>
+          <li>Power-ups reset each Tuesday morning.</li>
+          <li>Postseason power-up strength stays the same.</li>
+          <li>Voided/cancelled bets restore any attached boost.</li>
+        </ul>
+
+        <h3>4. Super Bowl</h3>
+        <ul>
+          <li>Super Bowl wagers have <strong>no wager amount limits</strong>.</li>
+          <li>No Small Boost, Big Boost, or Tax Man may be used on Super Bowl wagers.</li>
+        </ul>
+
+        <h3>5. Loans & Interest</h3>
+        <ul>
+          <li>Loans are fixed at <strong>$1,000</strong>.</li>
+          <li>Maximum <strong>one loan per NFL week</strong>.</li>
+          <li>There is <strong>no overall debt cap</strong>.</li>
+          <li>Interest is <strong>10% per NFL week</strong> and is assessed Tuesday morning.</li>
+          <li>A newly taken loan does not get charged interest until the following Tuesday rollover.</li>
+          <li>Available cash automatically pays weekly interest first.</li>
+          <li>Any unpaid interest becomes <strong>Interest Owed</strong>.</li>
+          <li>Players may repay debt at any time. Repayments hit Interest Owed first, then principal.</li>
+        </ul>
+
+        <h3>6. Bet Locking & Settlement</h3>
+        <ul>
+          <li>No wager may be placed after kickoff.</li>
+          <li>Odds and lines lock when the wager is submitted.</li>
+          <li>Pushes return the original stake.</li>
+          <li>Voided/cancelled bets return the stake.</li>
+          <li>Bad or missing lines are disabled rather than guessed.</li>
+        </ul>
+
+        <h3>7. Public Records</h3>
+        <ul>
+          <li>All wagers and transactions are visible league-wide.</li>
+          <li>Each player has a personal transaction history.</li>
+          <li>The League Ledger is append-only.</li>
+          <li>Commissioner corrections appear as public adjustment transactions rather than silently editing history.</li>
+          <li>Peak net worth and lowest net worth are tracked for every player.</li>
+        </ul>
+
+        <h3>8. Tuesday Rollover</h3>
+        <ul>
+          <li>Settle the previous week's activity.</li>
+          <li>Charge weekly interest and auto-pay from available cash.</li>
+          <li>Save standings snapshots and update peak/low net worth.</li>
+          <li>Generate the weekly recap.</li>
+          <li>Reset 10-bet limit, Big Bet availability, weekly loan availability, and weekly power-ups.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <div class="footer">
+    Demo frontend. Authentication, live odds, settlements, and persistent league data should be connected to Firebase + backend API.
+  </div>
+</div>
+
+<div class="modal" id="loginModal">
+  <div class="modal-panel">
+    <h2>League Account</h2>
+    <p class="muted">Demo login UI. Replace the handler with Firebase Authentication when the project is connected.</p>
+    <div class="tabs-mini">
+      <button class="btn" id="googleLoginBtn">Continue with Google</button>
+    </div>
+    <div style="text-align:center" class="muted">or</div>
+    <div style="margin-top:12px">
+      <label>Email</label>
+      <input id="emailInput" type="email" placeholder="you@example.com" />
+    </div>
+    <div style="margin-top:10px">
+      <label>Password</label>
+      <input id="passwordInput" type="password" placeholder="••••••••" />
+    </div>
+    <button class="btn" id="emailLoginBtn" style="width:100%;margin-top:14px">Log In / Create Account</button>
+    <button class="btn secondary" id="closeLoginBtn" style="width:100%;margin-top:8px">Close</button>
+  </div>
+</div>
+
+<div class="modal" id="repayModal">
+  <div class="modal-panel">
+    <h2>Repay Debt</h2>
+    <p class="muted">Repayments apply to Interest Owed first, then principal.</p>
+    <label>Amount</label>
+    <input id="repayAmount" type="number" min="1" step="1" placeholder="100" />
+    <button class="btn" id="confirmRepayBtn" style="width:100%;margin-top:14px">Submit Repayment</button>
+    <button class="btn secondary" id="closeRepayBtn" style="width:100%;margin-top:8px">Cancel</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   KLINK SPORTSBOOK LEAGUE — FRONTEND DEMO
+   ------------------------------------------------------------
+   Recommended production architecture:
+   - Firebase Authentication for accounts/logins
+   - Firestore or Apps Script/Sheets for league data
+   - Server-side verification for user identity + wager actions
+   - Live odds/scores fetched by backend, never directly by browser
+   ============================================================ */
+
+const RULES = {
+  STARTING_BANKROLL: 2000,
+  WEEKLY_INTEREST_RATE: 0.10,
+  LOAN_AMOUNT: 1000,
+  MAX_BETS_PER_WEEK: 10,
+  NORMAL_BET_MIN: 10,
+  NORMAL_BET_MAX: 100,
+  BIG_BET_MIN: 101,
+  BIG_BET_MAX: 200,
+  SMALL_BOOST_MULTIPLIER: 1.5,
+  BIG_BOOST_MULTIPLIER: 2.0,
+  TAX_MAN_RATE: 0.20
+};
+
+const demoGames = [
+  {
+    id:"g1", away:"Tampa Bay Buccaneers", home:"Cincinnati Bengals", time:"Sun 1:00 PM",
+    markets:[
+      {label:"TB +3.5", odds:-108, market:"spread"},
+      {label:"CIN -3.5", odds:-111, market:"spread"},
+      {label:"Over 50.5", odds:-108, market:"total"},
+      {label:"Under 50.5", odds:-111, market:"total"}
+    ]
+  },
+  {
+    id:"g2", away:"Buffalo Bills", home:"Houston Texans", time:"Sun 1:00 PM",
+    markets:[
+      {label:"BUF ML", odds:-124, market:"moneyline"},
+      {label:"HOU ML", odds:102, market:"moneyline"},
+      {label:"BUF -1.5", odds:-110, market:"spread"},
+      {label:"HOU +1.5", odds:-110, market:"spread"}
+    ]
+  },
+  {
+    id:"g3", away:"Green Bay Packers", home:"Minnesota Vikings", time:"Sun 4:25 PM",
+    markets:[
+      {label:"GB ML", odds:103, market:"moneyline"},
+      {label:"MIN ML", odds:-123, market:"moneyline"},
+      {label:"Over 46", odds:-113, market:"total"},
+      {label:"Under 46", odds:-105, market:"total"}
+    ]
+  },
+  {
+    id:"g4", away:"Denver Broncos", home:"Kansas City Chiefs", time:"Mon 8:15 PM",
+    markets:[
+      {label:"DEN +2.5", odds:-104, market:"spread"},
+      {label:"KC -2.5", odds:-115, market:"spread"},
+      {label:"DEN ML", odds:124, market:"moneyline"},
+      {label:"KC ML", odds:-145, market:"moneyline"}
+    ]
+  }
+];
+
+const players = [
+  {name:"Jared", cash:2310, principal:0, interestOwed:0, interestPaid:0, wins:8, losses:5, roi:18.2, peak:2540, low:1900, big:"2-0", tax:52},
+  {name:"Sara", cash:2175, principal:0, interestOwed:0, interestPaid:0, wins:7, losses:6, roi:11.1, peak:2280, low:1810, big:"1-1", tax:188},
+  {name:"Chris", cash:2082, principal:0, interestOwed:0, interestPaid:0, wins:6, losses:5, roi:7.8, peak:2210, low:1930, big:"1-0", tax:34},
+  {name:"John", cash:1980, principal:0, interestOwed:0, interestPaid:0, wins:5, losses:5, roi:-1.0, peak:2075, low:1890, big:"0-1", tax:0},
+  {name:"Leah", cash:1710, principal:1000, interestOwed:0, interestPaid:100, wins:4, losses:7, roi:-8.1, peak:2050, low:710, big:"1-2", tax:18},
+  {name:"Mike", cash:880, principal:2000, interestOwed:0, interestPaid:300, wins:3, losses:9, roi:-22.8, peak:2020, low:-1120, big:"0-2", tax:0}
+].map(p => ({...p, net:p.cash-p.principal-p.interestOwed}));
+
+let currentUser = {
+  name:"Chris",
+  cash:2000,
+  principal:0,
+  interestOwed:0,
+  interestPaid:0,
+  betsThisWeek:0,
+  loanUsed:false
+};
+
+let selectedBet = null;
+let openBets = [
+  {player:"Jared", bet:"Bills ML", stake:100, odds:130, power:"Big Boost", status:"OPEN", taxEligible:true},
+  {player:"Sara", bet:"Bengals -3.5", stake:75, odds:-110, power:"None", status:"OPEN", taxEligible:true},
+  {player:"Mike", bet:"Chiefs -2.5", stake:180, odds:-115, power:"BIG BET — TAX EXEMPT", status:"OPEN", taxEligible:false}
+];
+
+let ledger = [
+  {time:"Sun 12:41 PM",player:"Jared",type:"BET",amount:-100,cash:2210,principal:0,interest:0,net:2210,note:"Bills ML +130 — Big Boost"},
+  {time:"Sun 12:44 PM",player:"Sara",type:"TAX MAN",amount:0,cash:2175,principal:0,interest:0,net:2175,note:"Tax Man attached to Jared's Bills wager"},
+  {time:"Mon 8:05 PM",player:"Mike",type:"LOAN",amount:1000,cash:880,principal:2000,interest:0,net:-1120,note:"Weekly $1,000 loan"},
+  {time:"Tue 7:00 AM",player:"Mike",type:"INTEREST",amount:-100,cash:0,principal:2000,interest:100,net:-2100,note:"Weekly interest assessed; insufficient cash to auto-pay full amount"}
+];
+
+const notifications = [
+  {unread:true,title:"Tax Man attached",body:"Sara used Tax Man on Jared's Bills ML wager."},
+  {unread:true,title:"Big Bet still available",body:"You have not used your Big Bet this week."},
+  {unread:false,title:"Weekly interest processed",body:"No interest was due on your account."},
+  {unread:false,title:"Week reset complete",body:"Your Small Boost, Big Boost, Tax Man, Big Bet, loan slot, and 10-bet limit were reset."}
+];
+
+function money(n){
+  const sign = n < 0 ? "-" : "";
+  return sign + "$" + Math.abs(Number(n||0)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function signedMoney(n){
+  const v=Number(n||0);
+  return (v>0?"+":"") + money(v);
+}
+function americanProfit(stake, odds){
+  stake = Number(stake); odds = Number(odds);
+  if(!Number.isFinite(stake)||!Number.isFinite(odds)||odds===0) return 0;
+  return odds>0 ? stake*odds/100 : stake*100/Math.abs(odds);
+}
+
+function showSection(id){
+  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  document.querySelectorAll("#mainNav button").forEach(b=>b.classList.toggle("active", b.dataset.target===id));
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+document.querySelectorAll("#mainNav button").forEach(btn=>{
+  btn.addEventListener("click",()=>showSection(btn.dataset.target));
+});
+
+function renderGames(){
+  const grid=document.getElementById("gamesGrid");
+  grid.innerHTML=demoGames.map(g=>`
+    <div class="game">
+      <div class="game-head">
+        <div>
+          <strong>${g.away} @ ${g.home}</strong>
+          <div class="muted" style="font-size:12px">${g.time}</div>
+        </div>
+        <span class="chip green">Open</span>
+      </div>
+      ${g.markets.map(m=>`
+        <div class="teamline">
+          <span>${m.label}</span>
+          <button class="odds-btn" data-game="${g.id}" data-label="${m.label}" data-odds="${m.odds}" data-market="${m.market}">
+            ${m.odds>0?"+":""}${m.odds}
+          </button>
+        </div>
+      `).join("")}
+    </div>
+  `).join("");
+
+  grid.querySelectorAll(".odds-btn").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const g=demoGames.find(x=>x.id===btn.dataset.game);
+      selectedBet={
+        gameId:g.id,
+        game:`${g.away} @ ${g.home}`,
+        selection:btn.dataset.label,
+        odds:Number(btn.dataset.odds),
+        market:btn.dataset.market
+      };
+      renderSlip();
+    });
+  });
+}
+
+function renderSlip(){
+  const empty=document.getElementById("betSlipEmpty");
+  const form=document.getElementById("betSlipForm");
+  if(!selectedBet){
+    empty.style.display="block"; form.style.display="none"; return;
+  }
+  empty.style.display="none"; form.style.display="block";
+  document.getElementById("slipGame").textContent=selectedBet.game;
+  document.getElementById("slipSelection").textContent=selectedBet.selection;
+  document.getElementById("slipOdds").textContent=(selectedBet.odds>0?"+":"")+selectedBet.odds;
+  updateSlipPreview();
+}
+
+function updateSlipPreview(){
+  if(!selectedBet) return;
+  const stake=Number(document.getElementById("stakeInput").value||0);
+  const betType=document.getElementById("betTypeSelect").value;
+  const power=document.getElementById("powerSelect").value;
+  const powerSelect=document.getElementById("powerSelect");
+
+  if(betType==="big"){
+    powerSelect.value="none";
+    powerSelect.disabled=true;
+  } else {
+    powerSelect.disabled=false;
+  }
+
+  let profit=americanProfit(stake,selectedBet.odds);
+  if(betType!=="big"){
+    if(powerSelect.value==="small") profit*=RULES.SMALL_BOOST_MULTIPLIER;
+    if(powerSelect.value==="big") profit*=RULES.BIG_BOOST_MULTIPLIER;
+  }
+  document.getElementById("profitPreview").textContent=money(profit);
+  document.getElementById("payoutPreview").textContent=money(stake+profit);
+}
+
+["stakeInput","betTypeSelect","powerSelect"].forEach(id=>{
+  document.getElementById(id).addEventListener("input",updateSlipPreview);
+  document.getElementById(id).addEventListener("change",updateSlipPreview);
+});
+
+function validateBet(stake,betType){
+  if(currentUser.betsThisWeek>=RULES.MAX_BETS_PER_WEEK) return "You have already used all 10 wagers this week.";
+  if(stake>currentUser.cash) return "Not enough cash. Borrow before placing this wager.";
+  if(betType==="normal" && (stake<RULES.NORMAL_BET_MIN || stake>RULES.NORMAL_BET_MAX))
+    return `Normal wagers must be $${RULES.NORMAL_BET_MIN}–$${RULES.NORMAL_BET_MAX}.`;
+  if(betType==="big" && (stake<RULES.BIG_BET_MIN || stake>RULES.BIG_BET_MAX))
+    return `Big Bets must be $${RULES.BIG_BET_MIN}–$${RULES.BIG_BET_MAX}.`;
+  return "";
+}
+
+document.getElementById("placeBetBtn").addEventListener("click",()=>{
+  if(!selectedBet) return;
+  const stake=Number(document.getElementById("stakeInput").value||0);
+  const betType=document.getElementById("betTypeSelect").value;
+  const power=document.getElementById("powerSelect").value;
+  const error=validateBet(stake,betType);
+  if(error){ alert(error); return; }
+
+  currentUser.cash-=stake;
+  currentUser.betsThisWeek++;
+  const powerLabel = betType==="big"
+    ? "BIG BET — TAX EXEMPT"
+    : power==="small" ? "Small Boost"
+    : power==="big" ? "Big Boost"
+    : "None";
+
+  openBets.unshift({
+    player:currentUser.name,
+    bet:selectedBet.selection,
+    stake,
+    odds:selectedBet.odds,
+    power:powerLabel,
+    status:"OPEN",
+    taxEligible:betType!=="big"
+  });
+
+  ledger.unshift({
+    time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
+    player:currentUser.name,
+    type:"BET",
+    amount:-stake,
+    cash:currentUser.cash,
+    principal:currentUser.principal,
+    interest:currentUser.interestOwed,
+    net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
+    note:`${selectedBet.selection} ${(selectedBet.odds>0?"+":"")+selectedBet.odds}${powerLabel!=="None"?" — "+powerLabel:""}`
+  });
+
+  renderAll();
+  alert("Wager placed in demo mode.");
+});
+
+function renderOpenBets(){
+  const body=document.getElementById("openBetsBody");
+  body.innerHTML=openBets.map((b,i)=>`
+    <tr>
+      <td>${b.player}</td>
+      <td>${b.bet}</td>
+      <td>${money(b.stake)}</td>
+      <td>${b.odds>0?"+":""}${b.odds}</td>
+      <td><span class="chip ${b.power.includes("BIG BET")?"gold":b.power.includes("Boost")?"blue":""}">${b.power}</span></td>
+      <td><span class="chip green">${b.status}</span></td>
+      <td>
+        ${b.taxEligible && b.player!==currentUser.name
+          ? `<button class="btn secondary tax-btn" data-index="${i}">Use Tax Man</button>`
+          : `<span class="muted">${b.taxEligible?"Own wager":"Tax Exempt"}</span>`}
+      </td>
+    </tr>
+  `).join("");
+
+  body.querySelectorAll(".tax-btn").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const b=openBets[Number(btn.dataset.index)];
+      if(!confirm(`Use Tax Man on ${b.player}'s ${b.bet}? This locks immediately.`)) return;
+      ledger.unshift({
+        time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
+        player:currentUser.name,
+        type:"TAX MAN",
+        amount:0,
+        cash:currentUser.cash,
+        principal:currentUser.principal,
+        interest:currentUser.interestOwed,
+        net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
+        note:`Tax Man attached to ${b.player}'s ${b.bet}`
+      });
+      alert("Tax Man attached in demo mode.");
+      renderLedger();
+    });
+  });
+}
+
+function renderStandings(){
+  const body=document.getElementById("standingsBody");
+  const sorted=[...players].sort((a,b)=>b.net-a.net);
+  body.innerHTML=sorted.map((p,i)=>`
+    <tr>
+      <td class="rank">${i+1}</td>
+      <td><strong>${p.name}</strong></td>
+      <td class="${p.net>=0?"green":"red"}"><strong>${money(p.net)}</strong></td>
+      <td>${money(p.cash)}</td>
+      <td>${money(p.principal)}</td>
+      <td>${money(p.interestOwed)}</td>
+      <td>${money(p.interestPaid)}</td>
+      <td>${p.wins}-${p.losses}</td>
+      <td class="${p.roi>=0?"green":"red"}">${p.roi>0?"+":""}${p.roi}%</td>
+      <td>${money(p.peak)}</td>
+      <td>${money(p.low)}</td>
+      <td>${p.big}</td>
+      <td>${money(p.tax)}</td>
+    </tr>
+  `).join("");
+
+  const filter=document.getElementById("ledgerPlayerFilter");
+  if(filter.options.length===1){
+    players.forEach(p=>{
+      const opt=document.createElement("option");
+      opt.value=p.name; opt.textContent=p.name; filter.appendChild(opt);
+    });
+  }
+}
+
+function renderLedger(){
+  const playerFilter=document.getElementById("ledgerPlayerFilter").value;
+  const typeFilter=document.getElementById("ledgerTypeFilter").value;
+  const rows=ledger.filter(x=>(!playerFilter||x.player===playerFilter)&&(!typeFilter||x.type===typeFilter));
+  const body=document.getElementById("ledgerBody");
+  body.innerHTML=rows.length?rows.map(x=>`
+    <tr>
+      <td>${x.time}</td><td>${x.player}</td><td><span class="chip">${x.type}</span></td>
+      <td class="${x.amount>0?"green":x.amount<0?"red":""}">${signedMoney(x.amount)}</td>
+      <td>${money(x.cash)}</td><td>${money(x.principal)}</td><td>${money(x.interest)}</td>
+      <td class="${x.net>=0?"green":"red"}">${money(x.net)}</td><td>${x.note}</td>
+    </tr>
+  `).join(""):`<tr><td colspan="9"><div class="empty">No matching transactions.</div></td></tr>`;
+}
+
+document.getElementById("ledgerPlayerFilter").addEventListener("change",renderLedger);
+document.getElementById("ledgerTypeFilter").addEventListener("change",renderLedger);
+document.getElementById("clearFiltersBtn").addEventListener("click",()=>{
+  document.getElementById("ledgerPlayerFilter").value="";
+  document.getElementById("ledgerTypeFilter").value="";
+  renderLedger();
+});
+
+function renderNotifications(){
+  const el=document.getElementById("notificationList");
+  el.innerHTML=notifications.map(n=>`
+    <div class="notification ${n.unread?"unread":""}">
+      <strong>${n.unread?"● ":""}${n.title}</strong>
+      <div class="muted" style="margin-top:4px">${n.body}</div>
+    </div>
+  `).join("");
+}
+
+function renderDashboardFeed(){
+  const items=[
+    ["J","Jared","placed $100 on Bills ML with Big Boost","2 min ago"],
+    ["S","Sara","used Tax Man on Jared's Bills wager","1 min ago"],
+    ["M","Mike","took his weekly $1,000 loan","Yesterday"],
+    ["C","Chris","has not used his Big Bet yet","This week"]
+  ];
+  document.getElementById("dashboardFeed").innerHTML=items.map(i=>`
+    <div class="feed-item">
+      <div class="avatar">${i[0]}</div>
+      <div><strong>${i[1]}</strong><div>${i[2]}</div></div>
+      <div class="feed-time">${i[3]}</div>
+    </div>
+  `).join("");
+}
+
+function renderAccountMetrics(){
+  document.getElementById("cashMetric").textContent=money(currentUser.cash);
+  document.getElementById("principalMetric").textContent=money(currentUser.principal);
+  document.getElementById("interestOwedMetric").textContent=money(currentUser.interestOwed);
+  document.getElementById("interestPaidMetric").textContent=money(currentUser.interestPaid);
+  const totalDebt=currentUser.principal+currentUser.interestOwed;
+  document.getElementById("debtMetric").textContent=money(totalDebt);
+  document.getElementById("netMetric").textContent=money(currentUser.cash-totalDebt);
+  document.getElementById("betCountMetric").textContent=currentUser.betsThisWeek;
+  document.getElementById("loanStatusMetric").textContent=currentUser.loanUsed?"Used":"Available";
+  document.getElementById("borrowBtn").disabled=currentUser.loanUsed;
+}
+
+document.getElementById("borrowBtn").addEventListener("click",()=>{
+  if(currentUser.loanUsed){alert("You already took your one loan for this NFL week.");return;}
+  if(!confirm("Borrow $1,000? You can only take one loan this NFL week.")) return;
+  currentUser.cash+=RULES.LOAN_AMOUNT;
+  currentUser.principal+=RULES.LOAN_AMOUNT;
+  currentUser.loanUsed=true;
+  ledger.unshift({
+    time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
+    player:currentUser.name,type:"LOAN",amount:RULES.LOAN_AMOUNT,cash:currentUser.cash,
+    principal:currentUser.principal,interest:currentUser.interestOwed,
+    net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
+    note:"Weekly fixed $1,000 loan"
+  });
+  renderAll();
+});
+
+const repayModal=document.getElementById("repayModal");
+document.getElementById("repayBtn").addEventListener("click",()=>repayModal.classList.add("open"));
+document.getElementById("closeRepayBtn").addEventListener("click",()=>repayModal.classList.remove("open"));
+document.getElementById("confirmRepayBtn").addEventListener("click",()=>{
+  let amount=Number(document.getElementById("repayAmount").value||0);
+  const total=currentUser.principal+currentUser.interestOwed;
+  if(amount<=0||amount>currentUser.cash){alert("Enter a valid repayment amount within your available cash.");return;}
+  amount=Math.min(amount,total);
+  if(amount<=0){alert("You do not owe anything.");return;}
+  const paidInterest=Math.min(currentUser.interestOwed,amount);
+  currentUser.interestOwed-=paidInterest;
+  currentUser.interestPaid+=paidInterest;
+  let remaining=amount-paidInterest;
+  currentUser.principal=Math.max(0,currentUser.principal-remaining);
+  currentUser.cash-=amount;
+  ledger.unshift({
+    time:new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),
+    player:currentUser.name,type:"REPAYMENT",amount:-amount,cash:currentUser.cash,
+    principal:currentUser.principal,interest:currentUser.interestOwed,
+    net:currentUser.cash-currentUser.principal-currentUser.interestOwed,
+    note:`Debt repayment; ${money(paidInterest)} applied to interest first`
+  });
+  repayModal.classList.remove("open");
+  renderAll();
+});
+
+const loginModal=document.getElementById("loginModal");
+document.getElementById("loginBtn").addEventListener("click",()=>loginModal.classList.add("open"));
+document.getElementById("closeLoginBtn").addEventListener("click",()=>loginModal.classList.remove("open"));
+
+function demoLogin(){
+  const email=document.getElementById("emailInput").value.trim();
+  const name=email ? email.split("@")[0] : "Chris";
+  document.getElementById("userPill").innerHTML=`<span class="status-dot"></span>${name}`;
+  document.getElementById("loginBtn").textContent="Account";
+  loginModal.classList.remove("open");
+  alert("Demo login only. Firebase Authentication will replace this action.");
+}
+document.getElementById("emailLoginBtn").addEventListener("click",demoLogin);
+document.getElementById("googleLoginBtn").addEventListener("click",demoLogin);
+
+function renderAll(){
+  renderAccountMetrics();
+  renderOpenBets();
+  renderStandings();
+  renderLedger();
+}
+
+renderGames();
+renderNotifications();
+renderDashboardFeed();
+renderAll();
+</script>
+</body>
+</html>
