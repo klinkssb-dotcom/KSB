@@ -500,9 +500,21 @@
       </div>
 
       <div class="grid cols-3" style="margin-top:16px">
-        <div class="card"><div class="eyebrow">League High</div><div class="metric gold">$2,540</div><div class="muted">Peak net worth — Jared</div></div>
-        <div class="card"><div class="eyebrow">League Low</div><div class="metric red">-$1,120</div><div class="muted">Lowest net worth — Mike</div></div>
-        <div class="card"><div class="eyebrow">Most Tax Collected</div><div class="metric blue">$188</div><div class="muted">Sara</div></div>
+        <div class="card">
+          <div class="eyebrow">League High</div>
+          <div class="metric gold" id="leagueHighMetric">$0.00</div>
+          <div class="muted" id="leagueHighLabel">No league data yet</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">League Low</div>
+          <div class="metric red" id="leagueLowMetric">$0.00</div>
+          <div class="muted" id="leagueLowLabel">No league data yet</div>
+        </div>
+        <div class="card">
+          <div class="eyebrow">Most Tax Collected</div>
+          <div class="metric blue" id="leagueTaxMetric">$0.00</div>
+          <div class="muted" id="leagueTaxLabel">No Tax Man earnings yet</div>
+        </div>
       </div>
     </section>
 
@@ -807,7 +819,7 @@
   </main>
 
   <div class="footer">
-    Firebase Authentication, Firestore league data, and live NFL odds are connected. Automatic score settlement, Tuesday rollover, parlays, and trusted server-side enforcement are the next backend steps.
+    KSB league data, live NFL odds, automatic settlement, Tuesday rollover, parlays, weekly recaps, and commissioner controls are connected.
   </div>
 </div>
 
@@ -1271,12 +1283,7 @@ let stopUsersListener = null;
 let stopRecapListener = null;
 let latestRecap = null;
 
-const notifications = [
-  {unread:true,title:"Tax Man attached",body:"Sara used Tax Man on Jared's Bills ML wager."},
-  {unread:true,title:"Big Bet still available",body:"You have not used your Big Bet this week."},
-  {unread:false,title:"Weekly interest processed",body:"No interest was due on your account."},
-  {unread:false,title:"Week reset complete",body:"Your Small Boost, Big Boost, Tax Man, Big Bet, loan slot, and 10-bet limit were reset."}
-];
+const notifications = [];
 
 function money(n){
   const sign = n < 0 ? "-" : "";
@@ -1845,13 +1852,71 @@ function renderOpenBets(){
   });
 }
 
+function tiedPlayerLabel_(matchingPlayers,zeroLabel){
+  if(!matchingPlayers.length) return zeroLabel;
+  if(matchingPlayers.length===players.length && players.length>1) return "All players";
+  if(matchingPlayers.length===1) return matchingPlayers[0].name;
+  if(matchingPlayers.length<=3) return matchingPlayers.map(p=>p.name).join(", ");
+  return `${matchingPlayers.length} players tied`;
+}
+
+function renderStandingsHighlights_(){
+  const highMetric=document.getElementById("leagueHighMetric");
+  const highLabel=document.getElementById("leagueHighLabel");
+  const lowMetric=document.getElementById("leagueLowMetric");
+  const lowLabel=document.getElementById("leagueLowLabel");
+  const taxMetric=document.getElementById("leagueTaxMetric");
+  const taxLabel=document.getElementById("leagueTaxLabel");
+
+  if(!players.length){
+    if(highMetric) highMetric.textContent="$0.00";
+    if(highLabel) highLabel.textContent="No league data yet";
+    if(lowMetric) lowMetric.textContent="$0.00";
+    if(lowLabel) lowLabel.textContent="No league data yet";
+    if(taxMetric) taxMetric.textContent="$0.00";
+    if(taxLabel) taxLabel.textContent="No Tax Man earnings yet";
+    return;
+  }
+
+  const high=Math.max(...players.map(p=>Number(p.peak||0)));
+  const low=Math.min(...players.map(p=>Number(p.low||0)));
+  const tax=Math.max(...players.map(p=>Number(p.tax||0)));
+
+  const highPlayers=players.filter(p=>Number(p.peak||0)===high);
+  const lowPlayers=players.filter(p=>Number(p.low||0)===low);
+  const taxPlayers=players.filter(p=>Number(p.tax||0)===tax);
+
+  if(highMetric) highMetric.textContent=money(high);
+  if(highLabel) highLabel.textContent=`Peak net worth — ${tiedPlayerLabel_(highPlayers,"No league data yet")}`;
+
+  if(lowMetric) lowMetric.textContent=money(low);
+  if(lowLabel) lowLabel.textContent=`Lowest net worth — ${tiedPlayerLabel_(lowPlayers,"No league data yet")}`;
+
+  if(taxMetric) taxMetric.textContent=money(tax);
+  if(taxLabel){
+    taxLabel.textContent=tax>0
+      ? tiedPlayerLabel_(taxPlayers,"No Tax Man earnings yet")
+      : "No Tax Man earnings yet";
+  }
+}
+
 function renderStandings(){
   const body=document.getElementById("standingsBody");
   const sorted=[...players].sort((a,b)=>b.net-a.net);
 
-  body.innerHTML=sorted.length ? sorted.map((p,i)=>`
+  let lastNet=null;
+  let lastRank=0;
+
+  body.innerHTML=sorted.length ? sorted.map((p,i)=>{
+    const currentNet=Number(p.net||0);
+    if(lastNet===null || Math.abs(currentNet-lastNet)>0.0001){
+      lastRank=i+1;
+      lastNet=currentNet;
+    }
+
+    return `
     <tr>
-      <td class="rank">${i+1}</td>
+      <td class="rank">${lastRank}</td>
       <td><strong>${p.name}</strong></td>
       <td class="${p.net>=0?"green":"red"}"><strong>${money(p.net)}</strong></td>
       <td>${money(p.cash)}</td>
@@ -1865,7 +1930,10 @@ function renderStandings(){
       <td>${p.big||"0-0"}</td>
       <td>${money(p.tax||0)}</td>
     </tr>
-  `).join("") : `<tr><td colspan="13"><div class="empty">No league members loaded yet.</div></td></tr>`;
+  `;
+  }).join("") : `<tr><td colspan="13"><div class="empty">No league members loaded yet.</div></td></tr>`;
+
+  renderStandingsHighlights_();
 
   const filter=document.getElementById("ledgerPlayerFilter");
   const selected=filter.value;
@@ -1904,12 +1972,12 @@ document.getElementById("clearFiltersBtn").addEventListener("click",()=>{
 
 function renderNotifications(){
   const el=document.getElementById("notificationList");
-  el.innerHTML=notifications.map(n=>`
+  el.innerHTML=notifications.length ? notifications.map(n=>`
     <div class="notification ${n.unread?"unread":""}">
       <strong>${n.unread?"● ":""}${n.title}</strong>
       <div class="muted" style="margin-top:4px">${n.body}</div>
     </div>
-  `).join("");
+  `).join("") : `<div class="empty">No notifications yet.</div>`;
 }
 
 function renderDashboardFeed(){
