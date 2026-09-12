@@ -813,7 +813,6 @@ function normalizeBackendGame_(g){
   if(g.moneyline?.away!=null){
     markets.push({
       label:`${g.awayTeam} ML`,
-      shortLabel:`${teamAbbr_(g.awayTeam)} ML`,
       odds:Number(g.moneyline.away),
       market:"moneyline",
       team:g.awayTeam,
@@ -825,7 +824,6 @@ function normalizeBackendGame_(g){
   if(g.moneyline?.home!=null){
     markets.push({
       label:`${g.homeTeam} ML`,
-      shortLabel:`${teamAbbr_(g.homeTeam)} ML`,
       odds:Number(g.moneyline.home),
       market:"moneyline",
       team:g.homeTeam,
@@ -838,7 +836,6 @@ function normalizeBackendGame_(g){
     if(g.spread.awayPoint!=null && g.spread.awayOdds!=null){
       markets.push({
         label:`${g.awayTeam} ${signedLine_(g.spread.awayPoint)}`,
-        shortLabel:`${teamAbbr_(g.awayTeam)} ${signedLine_(g.spread.awayPoint)}`,
         odds:Number(g.spread.awayOdds),
         market:"spread",
         team:g.awayTeam,
@@ -850,7 +847,6 @@ function normalizeBackendGame_(g){
     if(g.spread.homePoint!=null && g.spread.homeOdds!=null){
       markets.push({
         label:`${g.homeTeam} ${signedLine_(g.spread.homePoint)}`,
-        shortLabel:`${teamAbbr_(g.homeTeam)} ${signedLine_(g.spread.homePoint)}`,
         odds:Number(g.spread.homeOdds),
         market:"spread",
         team:g.homeTeam,
@@ -864,7 +860,6 @@ function normalizeBackendGame_(g){
     if(g.total.point!=null && g.total.overOdds!=null){
       markets.push({
         label:`Over ${g.total.point}`,
-        shortLabel:`Over ${g.total.point}`,
         odds:Number(g.total.overOdds),
         market:"total",
         team:"",
@@ -876,7 +871,6 @@ function normalizeBackendGame_(g){
     if(g.total.point!=null && g.total.underOdds!=null){
       markets.push({
         label:`Under ${g.total.point}`,
-        shortLabel:`Under ${g.total.point}`,
         odds:Number(g.total.underOdds),
         market:"total",
         team:"",
