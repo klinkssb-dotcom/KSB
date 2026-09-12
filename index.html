@@ -192,6 +192,30 @@
     .modal-panel h2{margin-top:0}
     .tabs-mini{display:flex;gap:8px;margin-bottom:14px}
     .tabs-mini button{flex:1}
+
+    .ksb-dialog-panel{
+      width:min(520px,92vw);
+      background:#0d1a2b;
+      border:1px solid var(--line);
+      border-radius:20px;
+      padding:22px;
+      box-shadow:var(--shadow)
+    }
+    .ksb-dialog-panel h2{margin:0 0 10px}
+    .ksb-dialog-message{
+      white-space:pre-line;
+      color:#d7e4f2;
+      line-height:1.5
+    }
+    .ksb-dialog-actions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      margin-top:18px
+    }
+    .ksb-dialog-actions .btn{min-width:110px}
+    .ksb-dialog-input{margin-top:14px}
+
     .footer{color:var(--muted);text-align:center;padding:30px 10px;font-size:12px}
     .status-dot{width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px}
     .bar{height:8px;background:#081523;border-radius:999px;overflow:hidden;margin-top:8px}
@@ -787,21 +811,22 @@
   </div>
 </div>
 
-<div class="modal" id="resetSeasonModal">
-  <div class="modal-card">
-    <button class="modal-close" id="closeResetSeasonModal" type="button">×</button>
-    <div class="eyebrow">Commissioner Only</div>
-    <h2>Reset Entire Season?</h2>
-    <p class="muted">
-      This will reset every player to $2,000 and permanently clear wagers,
-      transaction history, weekly recaps, snapshots, notifications, debt, and records.
-    </p>
-    <p><strong>This cannot be undone.</strong></p>
-    <label for="resetSeasonConfirmText">Type RESET to continue</label>
-    <input id="resetSeasonConfirmText" type="text" autocomplete="off" placeholder="RESET">
-    <button class="btn danger" id="confirmResetSeasonBtn" type="button" style="margin-top:12px;width:100%">
-      Reset Entire Season
-    </button>
+
+<div class="modal" id="ksbDialogModal" aria-hidden="true">
+  <div class="ksb-dialog-panel">
+    <div class="eyebrow" id="ksbDialogEyebrow">KSB</div>
+    <h2 id="ksbDialogTitle">Confirm</h2>
+    <div class="ksb-dialog-message" id="ksbDialogMessage"></div>
+
+    <div class="ksb-dialog-input" id="ksbDialogInputWrap" style="display:none">
+      <label id="ksbDialogInputLabel" for="ksbDialogInput">Confirmation</label>
+      <input id="ksbDialogInput" type="text" autocomplete="off">
+    </div>
+
+    <div class="ksb-dialog-actions">
+      <button class="btn secondary" id="ksbDialogCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="ksbDialogConfirmBtn" type="button">Confirm</button>
+    </div>
   </div>
 </div>
 
@@ -856,8 +881,140 @@ import {
   setDoc,
   onSnapshot,
   collection,
+  getDocs,
+  writeBatch,
   runTransaction
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+
+const ksbDialogModal=document.getElementById("ksbDialogModal");
+const ksbDialogEyebrow=document.getElementById("ksbDialogEyebrow");
+const ksbDialogTitle=document.getElementById("ksbDialogTitle");
+const ksbDialogMessage=document.getElementById("ksbDialogMessage");
+const ksbDialogInputWrap=document.getElementById("ksbDialogInputWrap");
+const ksbDialogInputLabel=document.getElementById("ksbDialogInputLabel");
+const ksbDialogInput=document.getElementById("ksbDialogInput");
+const ksbDialogCancelBtn=document.getElementById("ksbDialogCancelBtn");
+const ksbDialogConfirmBtn=document.getElementById("ksbDialogConfirmBtn");
+
+let ksbDialogResolve=null;
+let ksbDialogRequiredText="";
+
+function closeKsbDialog_(value){
+  if(!ksbDialogModal) return;
+  ksbDialogModal.classList.remove("open");
+  ksbDialogModal.setAttribute("aria-hidden","true");
+  const resolver=ksbDialogResolve;
+  ksbDialogResolve=null;
+  ksbDialogRequiredText="";
+  if(resolver) resolver(value);
+}
+
+function showKsbDialog_(options={}){
+  const {
+    eyebrow="KSB",
+    title="Confirm",
+    message="",
+    confirmLabel="Confirm",
+    cancelLabel="Cancel",
+    showCancel=true,
+    danger=false,
+    requiredText=""
+  }=options;
+
+  return new Promise(resolve=>{
+    if(ksbDialogResolve){
+      const prior=ksbDialogResolve;
+      ksbDialogResolve=null;
+      prior(false);
+    }
+
+    ksbDialogResolve=resolve;
+    ksbDialogRequiredText=String(requiredText||"").trim().toUpperCase();
+
+    ksbDialogEyebrow.textContent=eyebrow;
+    ksbDialogTitle.textContent=title;
+    ksbDialogMessage.textContent=message;
+    ksbDialogConfirmBtn.textContent=confirmLabel;
+    ksbDialogCancelBtn.textContent=cancelLabel;
+    ksbDialogCancelBtn.style.display=showCancel?"inline-flex":"none";
+    ksbDialogConfirmBtn.classList.toggle("danger",Boolean(danger));
+
+    if(ksbDialogRequiredText){
+      ksbDialogInputWrap.style.display="block";
+      ksbDialogInputLabel.textContent=`Type ${ksbDialogRequiredText} to confirm`;
+      ksbDialogInput.value="";
+      ksbDialogInput.placeholder=ksbDialogRequiredText;
+      ksbDialogConfirmBtn.disabled=true;
+    }else{
+      ksbDialogInputWrap.style.display="none";
+      ksbDialogInput.value="";
+      ksbDialogConfirmBtn.disabled=false;
+    }
+
+    ksbDialogModal.classList.add("open");
+    ksbDialogModal.setAttribute("aria-hidden","false");
+
+    setTimeout(()=>{
+      if(ksbDialogRequiredText) ksbDialogInput.focus();
+      else ksbDialogConfirmBtn.focus();
+    },0);
+  });
+}
+
+function ksbConfirm_(message,options={}){
+  return showKsbDialog_({
+    title:options.title||"Are you sure?",
+    message,
+    confirmLabel:options.confirmLabel||"Yes, continue",
+    cancelLabel:options.cancelLabel||"Cancel",
+    danger:Boolean(options.danger),
+    requiredText:options.requiredText||"",
+    showCancel:true,
+    eyebrow:options.eyebrow||"Confirm Action"
+  });
+}
+
+function ksbNotice_(message,options={}){
+  return showKsbDialog_({
+    title:options.title||"KSB",
+    message,
+    confirmLabel:options.confirmLabel||"OK",
+    showCancel:false,
+    danger:false,
+    eyebrow:options.eyebrow||"KSB"
+  });
+}
+
+function ksbAlert_(message){
+  void ksbNotice_(String(message||""),{title:"KSB"});
+}
+
+ksbDialogInput?.addEventListener("input",()=>{
+  if(!ksbDialogRequiredText){
+    ksbDialogConfirmBtn.disabled=false;
+    return;
+  }
+  ksbDialogConfirmBtn.disabled=
+    ksbDialogInput.value.trim().toUpperCase()!==ksbDialogRequiredText;
+});
+
+ksbDialogCancelBtn?.addEventListener("click",()=>closeKsbDialog_(false));
+ksbDialogConfirmBtn?.addEventListener("click",()=>{
+  if(ksbDialogRequiredText &&
+     ksbDialogInput.value.trim().toUpperCase()!==ksbDialogRequiredText){
+    return;
+  }
+  closeKsbDialog_(true);
+});
+
+ksbDialogModal?.addEventListener("click",event=>{
+  if(event.target===ksbDialogModal &&
+     ksbDialogCancelBtn.style.display!=="none"){
+    closeKsbDialog_(false);
+  }
+});
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyA_xE167TWQ6NVFUgzxSEXDzAsIft5lJG0",
@@ -1172,7 +1329,7 @@ function calculateParlayOddsClient_(){
 
 function addLegToParlay_(leg){
   if(parlayLegs.some(x=>x.gameId===leg.gameId)){
-    alert("Parlays currently allow one leg per NFL game. Same-game parlays need special correlated pricing.");
+    ksbAlert_("Parlays currently allow one leg per NFL game. Same-game parlays need special correlated pricing.");
     return;
   }
   parlayLegs.push({...leg});
@@ -1184,8 +1341,14 @@ function removeParlayLeg_(index){
   renderSlip();
 }
 
-function clearParlay_(){
-  if(parlayLegs.length && !confirmAction_("Clear every leg from this parlay?")) return;
+async function clearParlay_(){
+  if(parlayLegs.length){
+    const ok=await ksbConfirm_(
+      "Clear every leg from this parlay?",
+      {title:"Clear Parlay",confirmLabel:"Clear Parlay",danger:true}
+    );
+    if(!ok) return;
+  }
   parlayLegs=[];
   renderSlip();
 }
@@ -1258,7 +1421,7 @@ function renderGames(){
       if(!g || !m) return;
 
       if(Date.now()>=new Date(g.commenceTime).getTime()){
-        alert("That game has already started.");
+        ksbAlert_("That game has already started.");
         renderGames();
         return;
       }
@@ -1407,7 +1570,7 @@ function validateBet(stake,betType,power){
 }
 
 document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
-  if(!auth.currentUser){alert("Log in before placing a wager.");return;}
+  if(!auth.currentUser){ksbAlert_("Log in before placing a wager.");return;}
 
   const mode=document.getElementById("wagerModeSelect")?.value||"single";
   const isParlay=mode==="parlay";
@@ -1418,10 +1581,10 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
   const betType=document.getElementById("betTypeSelect").value;
   const power=document.getElementById("powerSelect").value;
   const error=validateBet(stake,betType,power);
-  if(error){alert(error);return;}
+  if(error){ksbAlert_(error);return;}
 
   const parlayOdds=isParlay ? calculateParlayOddsClient_() : null;
-  if(isParlay && parlayOdds==null){alert("Could not calculate the parlay odds.");return;}
+  if(isParlay && parlayOdds==null){ksbAlert_("Could not calculate the parlay odds.");return;}
 
   const confirmOdds=isParlay ? parlayOdds : selectedBet.odds;
   const confirmSelection=isParlay
@@ -1435,7 +1598,13 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
     (betType==="big" ? `\nType: Big Bet` : ``) +
     (power!=="none" ? `\nPower-Up: ${power==="small"?"Small Boost":"Big Boost"}` : ``);
 
-  if(!confirmAction_(confirmText)) return;
+  {
+    const confirmed=await ksbConfirm_(confirmText,{
+      title:"Place This Wager?",
+      confirmLabel:"Place Wager"
+    });
+    if(!confirmed) return;
+  }
 
   const powerLabel=betType==="big"
     ? "BIG BET — TAX EXEMPT"
@@ -1569,10 +1738,10 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
       renderSlip();
     }
 
-    alert("CONFIRMED: Your wager was placed successfully.");
+    ksbAlert_("CONFIRMED: Your wager was placed successfully.");
   }catch(err){
     console.error(err);
-    alert(err?.message||"Could not place wager.");
+    ksbAlert_(err?.message||"Could not place wager.");
   }finally{
     button.disabled=false;
     button.textContent="Place Wager";
@@ -1603,12 +1772,18 @@ function renderOpenBets(){
 
   body.querySelectorAll(".tax-btn").forEach(btn=>{
     btn.addEventListener("click",async ()=>{
-      if(!auth.currentUser){alert("Log in first.");return;}
-      if(currentUser.taxManUsed){alert("You already used Tax Man this week.");return;}
+      if(!auth.currentUser){ksbAlert_("Log in first.");return;}
+      if(currentUser.taxManUsed){ksbAlert_("You already used Tax Man this week.");return;}
 
       const b=openBets.find(x=>x.id===btn.dataset.id);
       if(!b) return;
-      if(!confirmAction_(`Are you sure you want to use Tax Man on ${b.player}'s ${b.selection}?\n\nThis uses your Tax Man for the week and locks to this wager immediately.`)) return;
+      {
+        const confirmed=await ksbConfirm_(
+          `Use Tax Man on ${b.player}'s ${b.selection}?\n\nThis uses your Tax Man for the week and locks to this wager immediately.`,
+          {title:"Use Tax Man?",confirmLabel:"Use Tax Man",danger:true}
+        );
+        if(!confirmed) return;
+      }
 
       const userRef=doc(db,"users",auth.currentUser.uid);
       const betRef=doc(db,"bets",b.id);
@@ -1659,10 +1834,10 @@ function renderOpenBets(){
             createdAtMs:now
           });
         });
-        alert("Tax Man attached.");
+        ksbAlert_("Tax Man attached.");
       }catch(err){
         console.error(err);
-        alert(err?.message || "Could not attach Tax Man.");
+        ksbAlert_(err?.message || "Could not attach Tax Man.");
       }finally{
         btn.disabled=false;
       }
@@ -1772,9 +1947,15 @@ function renderAccountMetrics(){
 }
 
 document.getElementById("borrowBtn").addEventListener("click",async ()=>{
-  if(!auth.currentUser){alert("Log in before using league banking.");return;}
-  if(currentUser.loanUsed){alert("You already took your one loan for this NFL week.");return;}
-  if(!confirmAction_("Are you sure you want to borrow $1,000?\n\nThis uses your one loan for the current NFL week and the balance will accrue weekly interest after its grace period.")) return;
+  if(!auth.currentUser){ksbAlert_("Log in before using league banking.");return;}
+  if(currentUser.loanUsed){ksbAlert_("You already took your one loan for this NFL week.");return;}
+  {
+    const confirmed=await ksbConfirm_(
+      "Borrow $1,000?\n\nThis uses your one loan for the current NFL week and the balance will accrue weekly interest after its grace period.",
+      {title:"Take Weekly Loan?",confirmLabel:"Borrow $1,000"}
+    );
+    if(!confirmed) return;
+  }
 
   const userRef=doc(db,"users",auth.currentUser.uid);
   const txRef=doc(collection(db,"transactions"));
@@ -1819,7 +2000,7 @@ document.getElementById("borrowBtn").addEventListener("click",async ()=>{
     });
   }catch(err){
     console.error(err);
-    alert(err?.message || "Could not take loan.");
+    ksbAlert_(err?.message || "Could not take loan.");
   }
 });
 
@@ -1827,11 +2008,17 @@ const repayModal=document.getElementById("repayModal");
 document.getElementById("repayBtn").addEventListener("click",()=>repayModal.classList.add("open"));
 document.getElementById("closeRepayBtn").addEventListener("click",()=>repayModal.classList.remove("open"));
 document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
-  if(!auth.currentUser){alert("Log in first.");return;}
+  if(!auth.currentUser){ksbAlert_("Log in first.");return;}
   const requested=Number(document.getElementById("repayAmount").value||0);
-  if(requested<=0){alert("Enter a valid repayment amount.");return;}
+  if(requested<=0){ksbAlert_("Enter a valid repayment amount.");return;}
 
-  if(!confirmAction_(`Are you sure you want to repay ${money(requested)}?\n\nRepayments apply to interest owed first, then principal.`)) return;
+  {
+    const confirmed=await ksbConfirm_(
+      `Repay ${money(requested)}?\n\nRepayments apply to interest owed first, then principal.`,
+      {title:"Confirm Repayment",confirmLabel:"Submit Repayment"}
+    );
+    if(!confirmed) return;
+  }
 
   const userRef=doc(db,"users",auth.currentUser.uid);
   const txRef=doc(collection(db,"transactions"));
@@ -1902,7 +2089,7 @@ document.getElementById("confirmRepayBtn").addEventListener("click",async ()=>{
     document.getElementById("repayAmount").value="";
   }catch(err){
     console.error(err);
-    alert(err?.message || "Could not repay debt.");
+    ksbAlert_(err?.message || "Could not repay debt.");
   }
 });
 
@@ -1917,7 +2104,7 @@ loginBtn.addEventListener("click", async ()=>{
         await signOut(auth);
       }catch(err){
         console.error(err);
-        alert("Could not log out: " + friendlyAuthError(err));
+        ksbAlert_("Could not log out: " + friendlyAuthError(err));
       }
     }
     return;
@@ -1949,7 +2136,7 @@ document.getElementById("googleLoginBtn").addEventListener("click", async ()=>{
     loginModal.classList.remove("open");
   }catch(err){
     console.error(err);
-    alert(friendlyAuthError(err));
+    ksbAlert_(friendlyAuthError(err));
   }
 });
 
@@ -1961,7 +2148,7 @@ document.getElementById("emailLoginBtn").addEventListener("click", async ()=>{
     loginModal.classList.remove("open");
   }catch(err){
     console.error(err);
-    alert(friendlyAuthError(err));
+    ksbAlert_(friendlyAuthError(err));
   }
 });
 
@@ -1971,10 +2158,10 @@ document.getElementById("emailSignupBtn").addEventListener("click", async ()=>{
   try{
     await createUserWithEmailAndPassword(auth,email,password);
     loginModal.classList.remove("open");
-    alert("Account created. You are now signed in.");
+    ksbAlert_("Account created. You are now signed in.");
   }catch(err){
     console.error(err);
-    alert(friendlyAuthError(err));
+    ksbAlert_(friendlyAuthError(err));
   }
 });
 
@@ -2057,7 +2244,7 @@ async function ensureAndWatchUserProfile(user){
     renderAll();
   },(err)=>{
     console.error("User profile listener failed",err);
-    alert("Signed in, but the league profile could not be loaded from Firestore.");
+    ksbAlert_("Signed in, but the league profile could not be loaded from Firestore.");
   });
 }
 
@@ -2135,7 +2322,7 @@ onAuthStateChanged(auth, async (user)=>{
     }catch(err){
       console.error(err);
       userPill.innerHTML=`<span class="status-dot" style="background:#ff6b6b"></span>Profile error`;
-      alert("Firebase login worked, but Firestore profile loading failed: " + (err?.message || err));
+      ksbAlert_("Firebase login worked, but Firestore profile loading failed: " + (err?.message || err));
     }
   }else{
     if(stopUserProfileListener){
@@ -2172,82 +2359,148 @@ onAuthStateChanged(auth, async (user)=>{
 });
 
 
-function confirmAction_(message){
-  return window.confirm(message);
+
+const resetSeasonBtn=document.getElementById("resetSeasonBtn");
+
+async function commitResetOperations_(operations){
+  const chunkSize=400;
+  for(let i=0;i<operations.length;i+=chunkSize){
+    const batch=writeBatch(db);
+    operations.slice(i,i+chunkSize).forEach(op=>{
+      if(op.type==="update") batch.update(op.ref,op.data);
+      if(op.type==="delete") batch.delete(op.ref);
+    });
+    await batch.commit();
+  }
 }
 
-const resetSeasonModal=document.getElementById("resetSeasonModal");
-const resetSeasonBtn=document.getElementById("resetSeasonBtn");
-const closeResetSeasonModal=document.getElementById("closeResetSeasonModal");
-const confirmResetSeasonBtn=document.getElementById("confirmResetSeasonBtn");
+async function resetSeasonDirect_(){
+  if(!auth.currentUser) throw new Error("You must be logged in.");
+  if(currentUser.role!=="commissioner") throw new Error("Commissioner access required.");
 
-resetSeasonBtn?.addEventListener("click",()=>{
+  const now=Date.now();
+  const operations=[];
+  let usersReset=0;
+  let itemsDeleted=0;
+
+  const usersSnap=await getDocs(collection(db,"users"));
+  usersSnap.forEach(userDoc=>{
+    usersReset++;
+    operations.push({
+      type:"update",
+      ref:userDoc.ref,
+      data:{
+        cash:2000,
+        principalOwed:0,
+        gracePrincipal:0,
+        interestOwed:0,
+        interestPaid:0,
+        betsThisWeek:0,
+        loanUsed:false,
+        bigBetUsed:false,
+        smallBoostUsed:false,
+        bigBoostUsed:false,
+        taxManUsed:false,
+        wins:0,
+        losses:0,
+        roi:0,
+        bigBetWins:0,
+        bigBetLosses:0,
+        bigBetRecord:"0-0",
+        taxEarned:0,
+        peakNetWorth:2000,
+        lowNetWorth:2000,
+        lastRolloverWeek:"",
+        lastRolloverAtMs:0,
+        seasonResetAtMs:now
+      }
+    });
+  });
+
+  for(const collectionName of [
+    "bets",
+    "transactions",
+    "weeklySnapshots",
+    "weeklyRecaps",
+    "notifications"
+  ]){
+    const snap=await getDocs(collection(db,collectionName));
+    snap.forEach(item=>{
+      itemsDeleted++;
+      operations.push({type:"delete",ref:item.ref});
+    });
+  }
+
+  operations.push({type:"delete",ref:doc(db,"league","state")});
+  operations.push({type:"delete",ref:doc(db,"league","latestRecap")});
+
+  await commitResetOperations_(operations);
+
+  return {usersReset,itemsDeleted};
+}
+
+resetSeasonBtn?.addEventListener("click",async ()=>{
+  if(!auth.currentUser){
+    await ksbNotice_("Log in before using commissioner controls.",{title:"Login Required"});
+    return;
+  }
+
   if(currentUser.role!=="commissioner"){
-    alert("Commissioner access required.");
+    await ksbNotice_("Commissioner access is required for a season reset.",{title:"Access Denied"});
     return;
   }
 
-  if(!window.confirm("Are you sure you want to begin a full season reset?\n\nYou will still have to type RESET and confirm one final time before anything is deleted.")){
-    return;
-  }
+  const first=await ksbConfirm_(
+    "This resets every player to $2,000 and permanently clears wagers, ledger history, weekly recaps, snapshots, notifications, debt, and records.",
+    {
+      title:"Reset Entire Season?",
+      confirmLabel:"Continue",
+      danger:true
+    }
+  );
+  if(!first) return;
 
-  document.getElementById("resetSeasonConfirmText").value="";
-  resetSeasonModal.classList.add("open");
-});
+  const typed=await ksbConfirm_(
+    "This cannot be undone.",
+    {
+      title:"Final Reset Confirmation",
+      confirmLabel:"RESET SEASON",
+      requiredText:"RESET",
+      danger:true
+    }
+  );
+  if(!typed) return;
 
-closeResetSeasonModal?.addEventListener("click",()=>{
-  resetSeasonModal.classList.remove("open");
-});
-
-confirmResetSeasonBtn?.addEventListener("click",async ()=>{
-  if(currentUser.role!=="commissioner" || !auth.currentUser){
-    alert("Commissioner access required.");
-    return;
-  }
-
-  const typed=document.getElementById("resetSeasonConfirmText").value.trim().toUpperCase();
-
-  if(typed!=="RESET"){
-    alert('Type RESET exactly to confirm.');
-    return;
-  }
-
-  if(!window.confirm("ARE YOU SURE?\n\nThis will permanently reset the ENTIRE KSB season for every player.\n\nAll wagers, ledger history, recaps, snapshots, notifications, debt, records, and bankroll changes will be cleared.\n\nClick OK only if you are certain.")){
-    return;
-  }
-
-  confirmResetSeasonBtn.disabled=true;
-  confirmResetSeasonBtn.textContent="Resetting…";
+  resetSeasonBtn.disabled=true;
+  const originalLabel=resetSeasonBtn.textContent;
+  resetSeasonBtn.textContent="Resetting…";
 
   try{
-    const idToken=await auth.currentUser.getIdToken(true);
+    const result=await resetSeasonDirect_();
 
-    const response=await fetch(KSB_BACKEND_URL,{
-      method:"POST",
-      headers:{
-        "Content-Type":"text/plain;charset=utf-8"
-      },
-      body:JSON.stringify({
-        action:"resetSeason",
-        idToken
-      })
-    });
-
-    const result=await response.json();
-
-    if(!result.ok){
-      throw new Error(result.error||"Season reset failed.");
-    }
-
-    resetSeasonModal.classList.remove("open");
-    alert(`CONFIRMED: Season reset completed successfully. ${result.usersReset||0} players were reset to the starting state.`);
+    await ksbNotice_(
+      `Season reset confirmed.\n\n${result.usersReset} player account(s) were reset to $2,000.\n${result.itemsDeleted} season record(s) were cleared.`,
+      {
+        title:"Season Reset Complete",
+        confirmLabel:"Done",
+        eyebrow:"Confirmed"
+      }
+    );
 
   }catch(err){
-    console.error(err);
-    alert(err?.message||"Season reset failed.");
+    console.error("Season reset failed:",err);
+
+    await ksbNotice_(
+      `${err?.message||"Unknown error"}\\n\\nIf this says permission denied, publish the updated Firestore rules provided with this file.`,
+      {
+        title:"Season Reset Failed",
+        confirmLabel:"Close",
+        eyebrow:"Error"
+      }
+    );
   }finally{
-    confirmResetSeasonBtn.disabled=false;
-    confirmResetSeasonBtn.textContent="Reset Entire Season";
+    resetSeasonBtn.disabled=false;
+    resetSeasonBtn.textContent=originalLabel;
   }
 });
 
