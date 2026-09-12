@@ -391,6 +391,14 @@
               <input id="stakeInput" type="number" min="10" max="200" step="1" value="25" />
             </div>
 
+            <div style="margin-top:10px">
+              <label for="wagerModeSelect">Bet Format</label>
+              <select id="wagerModeSelect">
+                <option value="single">Single Bet</option>
+                <option value="parlay">Parlay</option>
+              </select>
+            </div>
+
             <div class="form-row" style="margin-top:10px">
               <div>
                 <label for="betTypeSelect">Wager Type</label>
@@ -949,6 +957,7 @@ let currentUser = {
 let stopUserProfileListener = null;
 
 let selectedBet = null;
+let parlayLegs = [];
 let openBets = [];
 let ledger = [];
 
@@ -989,6 +998,49 @@ function showSection(id){
 document.querySelectorAll("#mainNav button").forEach(btn=>{
   btn.addEventListener("click",()=>showSection(btn.dataset.target));
 });
+
+
+function americanToDecimalClient_(odds){
+  const n=Number(odds);
+  if(!Number.isFinite(n)||n===0) return null;
+  return n>0 ? 1+n/100 : 1+100/Math.abs(n);
+}
+
+function decimalToAmericanClient_(d){
+  const n=Number(d);
+  if(!Number.isFinite(n)||n<=1) return null;
+  return n>=2 ? Math.round((n-1)*100) : Math.round(-100/(n-1));
+}
+
+function calculateParlayOddsClient_(){
+  if(parlayLegs.length<2) return null;
+  let decimalProduct=1;
+  for(const leg of parlayLegs){
+    const d=americanToDecimalClient_(leg.odds);
+    if(!d) return null;
+    decimalProduct*=d;
+  }
+  return decimalToAmericanClient_(decimalProduct);
+}
+
+function addLegToParlay_(leg){
+  if(parlayLegs.some(x=>x.gameId===leg.gameId)){
+    alert("Parlays currently allow one leg per NFL game. Same-game parlays need special correlated pricing.");
+    return;
+  }
+  parlayLegs.push({...leg});
+  renderSlip();
+}
+
+function removeParlayLeg_(index){
+  parlayLegs.splice(index,1);
+  renderSlip();
+}
+
+function clearParlay_(){
+  parlayLegs=[];
+  renderSlip();
+}
 
 function renderGames(){
   const grid=document.getElementById("gamesGrid");
@@ -1076,7 +1128,13 @@ function renderGames(){
         point:m.point ?? null,
         side:m.side || ""
       };
-      renderSlip();
+
+      const wagerMode=document.getElementById("wagerModeSelect")?.value||"single";
+      if(wagerMode==="parlay"){
+        addLegToParlay_(selectedBet);
+      }else{
+        renderSlip();
+      }
     });
   });
 }
@@ -1084,10 +1142,49 @@ function renderGames(){
 function renderSlip(){
   const empty=document.getElementById("betSlipEmpty");
   const form=document.getElementById("betSlipForm");
-  if(!selectedBet){
-    empty.style.display="block"; form.style.display="none"; return;
+  const mode=document.getElementById("wagerModeSelect")?.value||"single";
+
+  if(mode==="parlay"){
+    if(!parlayLegs.length){
+      empty.textContent="Select at least two lines from different games to build a parlay.";
+      empty.style.display="block";
+      form.style.display="none";
+      return;
+    }
+
+    empty.style.display="none";
+    form.style.display="block";
+
+    const parlayOdds=calculateParlayOddsClient_();
+    document.getElementById("slipGame").textContent=`${parlayLegs.length}-Leg Parlay`;
+    document.getElementById("slipSelection").innerHTML=parlayLegs.map((leg,i)=>`
+      <div class="notification" style="margin:6px 0">
+        <div>
+          <strong>${leg.selection}</strong>
+          <div class="muted">${leg.game}</div>
+        </div>
+        <button class="btn secondary" type="button" data-remove-parlay-leg="${i}">Remove</button>
+      </div>
+    `).join("");
+    document.getElementById("slipOdds").textContent=parlayOdds==null ? "Add another leg" : `${parlayOdds>0?"+":""}${parlayOdds}`;
+
+    document.querySelectorAll("[data-remove-parlay-leg]").forEach(btn=>{
+      btn.addEventListener("click",()=>removeParlayLeg_(Number(btn.dataset.removeParlayLeg)));
+    });
+
+    updateSlipPreview();
+    return;
   }
-  empty.style.display="none"; form.style.display="block";
+
+  if(!selectedBet){
+    empty.textContent="Select a line to start a wager.";
+    empty.style.display="block";
+    form.style.display="none";
+    return;
+  }
+
+  empty.style.display="none";
+  form.style.display="block";
   document.getElementById("slipGame").textContent=selectedBet.game;
   document.getElementById("slipSelection").textContent=selectedBet.selection;
   document.getElementById("slipOdds").textContent=(selectedBet.odds>0?"+":"")+selectedBet.odds;
@@ -1095,7 +1192,7 @@ function renderSlip(){
 }
 
 function updateSlipPreview(){
-  if(!selectedBet) return;
+  const mode=document.getElementById("wagerModeSelect")?.value||"single";
   const stake=Number(document.getElementById("stakeInput").value||0);
   const betType=document.getElementById("betTypeSelect").value;
   const power=document.getElementById("powerSelect").value;
@@ -1104,27 +1201,50 @@ function updateSlipPreview(){
   if(betType==="big"){
     powerSelect.value="none";
     powerSelect.disabled=true;
-  } else {
+  }else{
     powerSelect.disabled=false;
   }
 
-  let profit=americanProfit(stake,selectedBet.odds);
+  const odds=mode==="parlay" ? calculateParlayOddsClient_() : selectedBet?.odds;
+  if(odds==null){
+    document.getElementById("profitPreview").textContent="$0.00";
+    document.getElementById("payoutPreview").textContent="$0.00";
+    return;
+  }
+
+  let profit=americanProfit(stake,odds);
   if(betType!=="big"){
     if(powerSelect.value==="small") profit*=RULES.SMALL_BOOST_MULTIPLIER;
     if(powerSelect.value==="big") profit*=RULES.BIG_BOOST_MULTIPLIER;
   }
+
   document.getElementById("profitPreview").textContent=money(profit);
   document.getElementById("payoutPreview").textContent=money(stake+profit);
 }
 
-["stakeInput","betTypeSelect","powerSelect"].forEach(id=>{
-  document.getElementById(id).addEventListener("input",updateSlipPreview);
-  document.getElementById(id).addEventListener("change",updateSlipPreview);
+["stakeInput","betTypeSelect","powerSelect","wagerModeSelect"].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.addEventListener("input",updateSlipPreview);
+  el.addEventListener("change",()=>{
+    if(id==="wagerModeSelect") renderSlip();
+    else updateSlipPreview();
+  });
 });
 
 function validateBet(stake,betType,power){
-  if(!selectedBet) return "Select a wager first.";
-  if(selectedBet.commenceTime && Date.now()>=new Date(selectedBet.commenceTime).getTime()) return "That game has already started.";
+  const mode=document.getElementById("wagerModeSelect")?.value||"single";
+
+  if(mode==="parlay"){
+    if(parlayLegs.length<2) return "A parlay needs at least two legs.";
+    if(parlayLegs.some(leg=>leg.commenceTime && Date.now()>=new Date(leg.commenceTime).getTime()))
+      return "One of the parlay games has already started.";
+  }else{
+    if(!selectedBet) return "Select a wager first.";
+    if(selectedBet.commenceTime && Date.now()>=new Date(selectedBet.commenceTime).getTime())
+      return "That game has already started.";
+  }
+
   if(currentUser.betsThisWeek>=RULES.MAX_BETS_PER_WEEK) return "You have already used all 10 wagers this week.";
   if(stake>currentUser.cash) return "Not enough cash. Borrow before placing this wager.";
   if(betType==="normal" && (stake<RULES.NORMAL_BET_MIN || stake>RULES.NORMAL_BET_MAX))
@@ -1140,16 +1260,22 @@ function validateBet(stake,betType,power){
 
 document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
   if(!auth.currentUser){alert("Log in before placing a wager.");return;}
-  if(!selectedBet) return;
+
+  const mode=document.getElementById("wagerModeSelect")?.value||"single";
+  const isParlay=mode==="parlay";
+  if(!isParlay && !selectedBet) return;
 
   const button=document.getElementById("placeBetBtn");
   const stake=Number(document.getElementById("stakeInput").value||0);
   const betType=document.getElementById("betTypeSelect").value;
   const power=document.getElementById("powerSelect").value;
   const error=validateBet(stake,betType,power);
-  if(error){ alert(error); return; }
+  if(error){alert(error);return;}
 
-  const powerLabel = betType==="big"
+  const parlayOdds=isParlay ? calculateParlayOddsClient_() : null;
+  if(isParlay && parlayOdds==null){alert("Could not calculate the parlay odds.");return;}
+
+  const powerLabel=betType==="big"
     ? "BIG BET — TAX EXEMPT"
     : power==="small" ? "Small Boost"
     : power==="big" ? "Big Boost"
@@ -1164,7 +1290,7 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
   button.textContent="Saving…";
 
   try{
-    await runTransaction(db, async (tx)=>{
+    await runTransaction(db,async tx=>{
       const userSnap=await tx.get(userRef);
       if(!userSnap.exists()) throw new Error("League profile not found.");
 
@@ -1172,7 +1298,10 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
       const cash=Number(u.cash||0);
       const betsThisWeek=Number(u.betsThisWeek||0);
 
-      if(selectedBet.commenceTime && Date.now()>=new Date(selectedBet.commenceTime).getTime()){
+      if(isParlay){
+        if(parlayLegs.some(leg=>leg.commenceTime && Date.now()>=new Date(leg.commenceTime).getTime()))
+          throw new Error("One of the parlay games has already started.");
+      }else if(selectedBet.commenceTime && Date.now()>=new Date(selectedBet.commenceTime).getTime()){
         throw new Error("That game has already started.");
       }
 
@@ -1190,10 +1319,10 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
       const oldLow=Number(u.lowNetWorth ?? netWorthAfter);
 
       const updates={
-        cash: cashAfter,
-        betsThisWeek: betsThisWeek+1,
-        peakNetWorth: Math.max(oldPeak,netWorthAfter),
-        lowNetWorth: Math.min(oldLow,netWorthAfter)
+        cash:cashAfter,
+        betsThisWeek:betsThisWeek+1,
+        peakNetWorth:Math.max(oldPeak,netWorthAfter),
+        lowNetWorth:Math.min(oldLow,netWorthAfter)
       };
       if(betType==="big") updates.bigBetUsed=true;
       if(power==="small") updates.smallBoostUsed=true;
@@ -1201,21 +1330,11 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
 
       tx.update(userRef,updates);
 
-      tx.set(betRef,{
+      const base={
         userId:auth.currentUser.uid,
-        player:u.displayName || currentUser.name,
-        gameId:selectedBet.gameId,
-        game:selectedBet.game,
-        awayTeam:selectedBet.awayTeam || "",
-        homeTeam:selectedBet.homeTeam || "",
-        commenceTime:selectedBet.commenceTime || "",
-        selection:selectedBet.selection,
-        market:selectedBet.market,
-        team:selectedBet.team || "",
-        point:selectedBet.point ?? null,
-        side:selectedBet.side || "",
+        player:u.displayName||currentUser.name,
         stake,
-        odds:selectedBet.odds,
+        odds:isParlay?parlayOdds:selectedBet.odds,
         betType,
         power,
         powerLabel,
@@ -1225,27 +1344,73 @@ document.getElementById("placeBetBtn").addEventListener("click", async ()=>{
         taxedByName:"",
         taxRate:0,
         createdAtMs:now
-      });
+      };
+
+      if(isParlay){
+        tx.set(betRef,{
+          ...base,
+          betKind:"parlay",
+          game:"Parlay",
+          selection:`${parlayLegs.length}-leg parlay`,
+          market:"parlay",
+          legs:parlayLegs.map(leg=>({
+            gameId:leg.gameId,
+            game:leg.game,
+            awayTeam:leg.awayTeam||"",
+            homeTeam:leg.homeTeam||"",
+            commenceTime:leg.commenceTime||"",
+            selection:leg.selection,
+            market:leg.market,
+            team:leg.team||"",
+            point:leg.point??null,
+            side:leg.side||"",
+            odds:Number(leg.odds)
+          })),
+          legResults:[]
+        });
+      }else{
+        tx.set(betRef,{
+          ...base,
+          betKind:"single",
+          gameId:selectedBet.gameId,
+          game:selectedBet.game,
+          awayTeam:selectedBet.awayTeam||"",
+          homeTeam:selectedBet.homeTeam||"",
+          commenceTime:selectedBet.commenceTime||"",
+          selection:selectedBet.selection,
+          market:selectedBet.market,
+          team:selectedBet.team||"",
+          point:selectedBet.point??null,
+          side:selectedBet.side||""
+        });
+      }
 
       tx.set(txRef,{
         userId:auth.currentUser.uid,
-        player:u.displayName || currentUser.name,
+        player:u.displayName||currentUser.name,
         type:"BET",
         amount:-stake,
         cashAfter,
         principalOwed:principal,
         interestOwed:interest,
         netWorth:cashAfter-principal-interest,
-        note:`${selectedBet.selection} ${(selectedBet.odds>0?"+":"")+selectedBet.odds}${powerLabel!=="None"?" — "+powerLabel:""}`,
+        note:isParlay
+          ? `${parlayLegs.length}-leg parlay ${(parlayOdds>0?"+":"")+parlayOdds}${powerLabel!=="None"?" — "+powerLabel:""}`
+          : `${selectedBet.selection} ${(selectedBet.odds>0?"+":"")+selectedBet.odds}${powerLabel!=="None"?" — "+powerLabel:""}`,
         relatedBetId:betRef.id,
         createdAtMs:now
       });
     });
 
+    if(isParlay){
+      parlayLegs=[];
+      renderSlip();
+    }
+
     alert("Wager saved to the league.");
   }catch(err){
     console.error(err);
-    alert(err?.message || "Could not place wager.");
+    alert(err?.message||"Could not place wager.");
   }finally{
     button.disabled=false;
     button.textContent="Place Wager";
@@ -1259,7 +1424,9 @@ function renderOpenBets(){
   body.innerHTML=rows.length ? rows.map((b,i)=>`
     <tr>
       <td>${b.player||"Player"}</td>
-      <td>${b.selection||b.bet||"Wager"}</td>
+      <td>${b.betKind==="parlay"
+          ? `<strong>${b.selection||"Parlay"}</strong><div class="muted">${(b.legs||[]).map(x=>x.selection).join(" + ")}</div>`
+          : (b.selection||b.bet||"Wager")}</td>
       <td>${money(b.stake)}</td>
       <td>${Number(b.odds)>0?"+":""}${b.odds}</td>
       <td><span class="chip ${(b.powerLabel||"").includes("BIG BET")?"gold":(b.powerLabel||"").includes("Boost")?"blue":""}">${b.powerLabel||"None"}</span></td>
