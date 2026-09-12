@@ -649,7 +649,7 @@
   </main>
 
   <div class="footer">
-    Firebase Authentication is connected. Live odds, settlements, balances, league data, and server-side authorization still need backend integration.
+    Firebase Authentication and Firestore user profiles are connected. Bets, settlements, balances, transactions, power-ups, and server-side authorization still need backend integration.
   </div>
 </div>
 
@@ -697,6 +697,13 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA_xE167TWQ6NVFUgzxSEXDzAsIft5lJG0",
@@ -710,6 +717,7 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
 
 /* ============================================================
@@ -785,14 +793,25 @@ const players = [
 ].map(p => ({...p, net:p.cash-p.principal-p.interestOwed}));
 
 let currentUser = {
-  name:"Chris",
-  cash:2000,
+  uid:"",
+  name:"Guest",
+  email:"",
+  role:"member",
+  cash:0,
   principal:0,
   interestOwed:0,
   interestPaid:0,
   betsThisWeek:0,
-  loanUsed:false
+  loanUsed:false,
+  bigBetUsed:false,
+  smallBoostUsed:false,
+  bigBoostUsed:false,
+  taxManUsed:false,
+  peakNetWorth:0,
+  lowNetWorth:0
 };
+
+let stopUserProfileListener = null;
 
 let selectedBet = null;
 let openBets = [
@@ -929,6 +948,7 @@ function validateBet(stake,betType){
 }
 
 document.getElementById("placeBetBtn").addEventListener("click",()=>{
+  if(!auth.currentUser){alert("Log in before placing a wager.");return;}
   if(!selectedBet) return;
   const stake=Number(document.getElementById("stakeInput").value||0);
   const betType=document.getElementById("betTypeSelect").value;
@@ -1102,6 +1122,7 @@ function renderAccountMetrics(){
 }
 
 document.getElementById("borrowBtn").addEventListener("click",()=>{
+  if(!auth.currentUser){alert("Log in before using league banking.");return;}
   if(currentUser.loanUsed){alert("You already took your one loan for this NFL week.");return;}
   if(!confirm("Borrow $1,000? You can only take one loan this NFL week.")) return;
   currentUser.cash+=RULES.LOAN_AMOUNT;
@@ -1215,17 +1236,125 @@ document.getElementById("emailSignupBtn").addEventListener("click", async ()=>{
   }
 });
 
-onAuthStateChanged(auth,(user)=>{
+
+function defaultUserProfile(user){
+  const fallbackName =
+    user.displayName ||
+    (user.email ? user.email.split("@")[0] : "Player");
+
+  return {
+    displayName: fallbackName,
+    email: user.email || "",
+    cash: RULES.STARTING_BANKROLL,
+    principalOwed: 0,
+    interestOwed: 0,
+    interestPaid: 0,
+    betsThisWeek: 0,
+    loanUsed: false,
+    bigBetUsed: false,
+    smallBoostUsed: false,
+    bigBoostUsed: false,
+    taxManUsed: false,
+    peakNetWorth: RULES.STARTING_BANKROLL,
+    lowNetWorth: RULES.STARTING_BANKROLL,
+    role: "member"
+  };
+}
+
+function applyProfileToCurrentUser(uid, data){
+  currentUser = {
+    uid,
+    name: data.displayName || "Player",
+    email: data.email || "",
+    role: data.role || "member",
+    cash: Number(data.cash ?? 0),
+    principal: Number(data.principalOwed ?? 0),
+    interestOwed: Number(data.interestOwed ?? 0),
+    interestPaid: Number(data.interestPaid ?? 0),
+    betsThisWeek: Number(data.betsThisWeek ?? 0),
+    loanUsed: Boolean(data.loanUsed),
+    bigBetUsed: Boolean(data.bigBetUsed),
+    smallBoostUsed: Boolean(data.smallBoostUsed),
+    bigBoostUsed: Boolean(data.bigBoostUsed),
+    taxManUsed: Boolean(data.taxManUsed),
+    peakNetWorth: Number(data.peakNetWorth ?? 0),
+    lowNetWorth: Number(data.lowNetWorth ?? 0)
+  };
+}
+
+async function ensureAndWatchUserProfile(user){
+  if(stopUserProfileListener){
+    stopUserProfileListener();
+    stopUserProfileListener = null;
+  }
+
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+
+  if(!snap.exists()){
+    await setDoc(ref, defaultUserProfile(user));
+  } else {
+    // Keep basic identity fields fresh without touching bankroll/league state.
+    const existing = snap.data();
+    const identityPatch = {};
+    if((user.email || "") !== (existing.email || "")) identityPatch.email = user.email || "";
+    if(user.displayName && user.displayName !== existing.displayName) identityPatch.displayName = user.displayName;
+    if(Object.keys(identityPatch).length){
+      await setDoc(ref, identityPatch, {merge:true});
+    }
+  }
+
+  stopUserProfileListener = onSnapshot(ref,(profileSnap)=>{
+    if(!profileSnap.exists()) return;
+    applyProfileToCurrentUser(user.uid, profileSnap.data());
+    userPill.innerHTML =
+      `<span class="status-dot"></span>${currentUser.name}` +
+      (currentUser.role === "commissioner" ? ` <span class="chip gold" style="margin-left:6px">Commissioner</span>` : "");
+    renderAll();
+  },(err)=>{
+    console.error("User profile listener failed",err);
+    alert("Signed in, but the league profile could not be loaded from Firestore.");
+  });
+}
+
+onAuthStateChanged(auth, async (user)=>{
   if(user){
-    const display=user.displayName || user.email?.split("@")[0] || "Player";
-    currentUser.name=display;
-    userPill.innerHTML=`<span class="status-dot"></span>${display}`;
     loginBtn.textContent="Log Out";
+    userPill.innerHTML=`<span class="status-dot"></span>Loading profile…`;
+    try{
+      await ensureAndWatchUserProfile(user);
+    }catch(err){
+      console.error(err);
+      userPill.innerHTML=`<span class="status-dot" style="background:#ff6b6b"></span>Profile error`;
+      alert("Firebase login worked, but Firestore profile loading failed: " + (err?.message || err));
+    }
   }else{
+    if(stopUserProfileListener){
+      stopUserProfileListener();
+      stopUserProfileListener = null;
+    }
+    currentUser = {
+      uid:"",
+      name:"Guest",
+      email:"",
+      role:"member",
+      cash:0,
+      principal:0,
+      interestOwed:0,
+      interestPaid:0,
+      betsThisWeek:0,
+      loanUsed:false,
+      bigBetUsed:false,
+      smallBoostUsed:false,
+      bigBoostUsed:false,
+      taxManUsed:false,
+      peakNetWorth:0,
+      lowNetWorth:0
+    };
     userPill.innerHTML=`<span class="status-dot" style="background:#8898aa"></span>Not signed in`;
     loginBtn.textContent="Log In";
+    renderAll();
   }
-  renderAll();
 });
 
 function renderAll(){
